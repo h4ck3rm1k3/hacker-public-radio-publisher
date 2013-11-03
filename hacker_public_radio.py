@@ -19,36 +19,68 @@ class ShowNotes(object):
     '''
 
     def __init__(self ):
-        self.series = None
-        self.tags = None
+        self.input_file=None
+        self.metadata = {}
+        self.audio_file = None
+        self.template = None
 
     def get_input_file(self):
         return self.input_file
+        
+    def set_input_file(self,v):
+        self.input_file=v
+        self.read_file()
+        # read metadata
+        self.read_metadata()
+
+    def get_html(self):
+        # You may also include very basic validated XHTML.
+        # See the example file on the ftp server.
+        # PLEASE USE THE TEMPLATE FILES FROM THE FTP SERVER.
+        # http://hackerpublicradio.org/sample_shownotes.html
+        # http://hackerpublicradio.org/sample_shownotes.txt
+        return "sample_shownotes.html"
+
+    def read_file(self):
+        self.audio_file =audiotools.open_files([self.input_file])
+
+    def read_metadata(self):
+        self.audio_metadata = self.audio_file.get_metadata()
+        print(self.audio_metadata)
+
+    def get_metadata(self, key, default=None):
+        if key in self.metadata :
+            return self.metadata[key]
+        else:
+            return default
+
+    ## acccessors for metadata
 
     def get_host_name(self):
         """
         returns the name of the show host
         """
-        pass
+        return self.get_metadata("ARTIST")
 
     def get_host_handle(self):
         """
         returns the handle of the show host
         """
-        pass
+	return self.get_metadata("Artist Handle")
+
+    def get_host_number(self):
+        return self.get_metadata("Artist Number" )
 
     def get_host_email_address(self):
-        pass
+        self.get_metadata("Artist Email")
         # 1. Hostname and email address:
         #    Ken Fallon (ken.fallon.nospam@nospam.gmail.com)
 
     def get_license(self):
+	return self.get_metadata(name="License", default="http://creativecommons.org/licenses/by-sa/3.0/")
         # By uploading your show you are agreeing that your work
         # will be released under a Creative Commons Attribution
         # ShareAlike 3.0 License.
-        # See:
-        return 'http://creativecommons.org/licenses/by-sa/3.0/'
-
         # If any part of your work is not covered by this License
         # make sure to state that clearly in the audio as well as
         # in the show notes. You must have written permission for
@@ -56,87 +88,58 @@ class ShowNotes(object):
 
     def get_title(self):
         # 2. Show Title: The title of your show
-        pass
-
+        return self.get_metadata("TITLE")
 
     def get_slot(self):
-        # 3. Desired Slot:
-        #    "Next Available Slot" or
-        #    "Date YYYY-MM-DD" or
-        #    "Episode Number %d" or
-        #    "Backup Shows/Don't Care"
-
-        return "Next Available Slot"
         # SCHEDULING:
         # After you upload your show we will process it and post it
         # ready for release on the date you requested or the first
         # available slot depending on which you selected. Shows will
         # not be removed from the FTP server until they are posted.
 
-    def get_progress(self):
-        # You can check the progress here:
-        # http://hackerpublicradio.org/calendar.php.
-
-        # Shows are scheduled on a first come first served basis.
-        # Once a show has been posted, no further changes can be made.
-        pass
-
-    def get_intro_added(self):
-        # 4. Intro and Outro Added:
-        #    YES or NO
-
-        return "YES"
-
-    def add_intro_outtro(self):
-        # Please add the intro and outro clips.
-        #http://audiotools.sourceforge.net/install.html
-        # prepend intro.flac
-        # append outro.flac
-        pass
-
-
+        # 3. Desired Slot:
+        #    "Next Available Slot" or
+        #    "Date YYYY-MM-DD" or
+        #    "Episode Number %d" or
+        #    "Backup Shows/Don't Care"
+        return self.get_metadata("Slot", default = "Next Available Slot")
 
     def get_series(self):
         # 5. Series/Tags:
-        return self.series
+        #return self.series
+        self.get_metadata("Series")
 
     def get_tags(self):
-        return self.tags
+        #return self.tags
+        self.get_metadata("Tags")
 
     def get_explicit(self):
-        return "Clean"
+        self.get_metadata("Explicit", default="Clean")
+        #return "Clean"
         # 6. Explicit:
         #    "Yes", or "Clean" (See iTunes for more information.)
 
     def get_twitter_summary(self):
         # 7. Twitter/Identi.CA Summary:
-        return ""
+        #return ""
+        self.get_metadata("Twitter Description")
 
-    def get_template(self):
-        # You may also include very basic validated XHTML.
-        # See the example file on the ftp server.
-        # PLEASE USE THE TEMPLATE FILES FROM THE FTP SERVER.
-        # http://hackerpublicradio.org/sample_shownotes.html
-        # http://hackerpublicradio.org/sample_shownotes.txt
-        return ()
+    def get_format(self):
+        # FORMATS:
+        # We will encode the MP3, ogg and spx formats.
+        # We prefer FLAC File format (Best - Level 8), 24 Bit, with
+        # a Project Rate of 44100 Hz but we will accept anything as
+        # long as it's audible. Please upload a media file in the
+        # highest quality you have.
+        # We mix down to mono by default so if you want stereo then
+        # make note of it in the shownotes.
+        return "FLAC"
 
-    def metadata(self, key, value):
-        pass
+    def get_shownotes_text(self):
+        #return self.show
+        self.get_metadata("COMMENTS")
 
-    def get_metdata(self):
-
-        # METADATA TAGS IN AUDIO FILE:
-        # The format of the tags should be:
-        self.metadata("TITLE",  self.get_title())
-        self.metadata("ALBUM",  "Hacker Public Radio")
-        self.metadata("ARTIST",  self.get_host_name())
-        self.metadata("GENRE",  "Podcast")
-        self.metadata("COMMENT",
-                      "http://hackerpublicradio.org" +
-                      "\n" +
-                      self.get_shownotes_text()
-        )
-
+## derived
     def get_filename(self):
         # FILENAME:
         # The file name should be "A-Za-z0-9" "-" or "_" nothing else.
@@ -161,18 +164,22 @@ class ShowNotes(object):
         # be verified manually.
         pass
 
-    def get_format(self):
-        # FORMATS:
-        # We will encode the MP3, ogg and spx formats.
-        # We prefer FLAC File format (Best - Level 8), 24 Bit, with
-        # a Project Rate of 44100 Hz but we will accept anything as
-        # long as it's audible. Please upload a media file in the
-        # highest quality you have.
-        # We mix down to mono by default so if you want stereo then
-        # make note of it in the shownotes.
-        return "FLAC"
 
-    def get_shownotes_text(self):
+## Processing
+
+    def get_intro_added(self):
+        # 4. Intro and Outro Added:
+        #    YES or NO
+        v = self.get_metadata("Contains Intro")
+        if v[0]== "Y" :
+            return True
+        return False      
+
+    def add_intro_outtro(self):
+        # Please add the intro and outro clips.
+        #http://audiotools.sourceforge.net/install.html
+        # prepend intro.flac
+        # append outro.flac
         pass
 
     def announce_mailing(self):
@@ -185,13 +192,16 @@ class ShowNotes(object):
 
     def put_main_ftp(self):
         #ftputil
-        pass 
+        pass
 
     def put_archive_org(self):
         #post to archive.org
         #http://archive.org/~vmb/abouts3.html
         #http://archive.org/help/abouts3.txt
-        #http://www.elastician.com/2011/02/accessing-internet-archive-with-boto.html
+
+        #http://www.elastician.com/2011/02/
+        #accessing-internet-archive-with-boto.html
+
         #http://www.archive.org/stream/jon-s3-test/archiveS3Man_djvu.txt
         pass
 
@@ -203,9 +213,20 @@ class ShowNotes(object):
         #post to commons
         pass
 
+    def get_progress(self):
+        # You can check the progress here:
+        # http://hackerpublicradio.org/calendar.php.
+
+        # Shows are scheduled on a first come first served basis.
+        # Once a show has been posted, no further changes can be made.
+        pass
+
 
 def publish_show(
-    
+        input_file ,
+        show_notes
 ):
-    pass
+    s = ShowNotes()
+    s.set_input_file( input_file )
+
         
