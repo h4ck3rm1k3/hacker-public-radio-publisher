@@ -1,0 +1,18 @@
+Hostname and email address: Ken Fallon (ken.fallon.nospam@nospam.gmail.com)
+Show Title: The title of your show
+Desired Slot: "Next Available Slot" or "Date YYYY-MM-DD" or "Episode Number XXXX" or "Backup Shows/Don't Care"
+Intro and Outro Added: YES or NO
+Series/Tags:
+Explicit: "Yes", or "Clean" (See iTunes for more information.)
+Twitter/Identi.CA Summary: 
+
+Sample Show notes
+
+This is an example of some show notes that you might include with an episode of HPR. 
+Having good show notes will help other listeners get more information on the topics you discuss in you episode. 
+It also helps search engines to associate your show with the topic, as search engines cannot as yet index audio files. 
+That said, they are probably working on it. 
+The other advantage is that it gives deaf hackers an insight into what your show is about.
+
+
+

@@ -1,0 +1,10 @@
+*pyc
+build
+dist
+*.egg-info
+stairs
+_*
+itemlist.txt
+.tox
+secret.py
+*~
