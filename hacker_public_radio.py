@@ -22,6 +22,9 @@ class ShowNotes(object):
         self.series = None
         self.tags = None
 
+    def get_input_file(self):
+        return self.input_file
+
     def get_host_name(self):
         """
         returns the name of the show host
@@ -200,3 +203,9 @@ class ShowNotes(object):
         #post to commons
         pass
 
+
+def publish_show(
+    
+):
+    pass
+        
