@@ -1,3 +1,7 @@
+"""
+setup
+"""
+
 from setuptools import setup, find_packages
 setup(
     name = "HackerPublicRadioPublisher",
@@ -17,7 +21,7 @@ setup(
      package_data = {
          '': ['*.txt', '*.flac', '*.html'],
     },
-    install_requires = 
+    install_requires =
     [
         'ftputil>=2.8',
         'internetarchive>=0.4.4',
@@ -26,12 +30,14 @@ setup(
         'docopt>=0.6.1',
         'pytest>=2.3.4',
         'jsonpatch>=1.1',
-        'requests>=2.0.0', 
-#        'requests>=1.2.0', 
+        'requests>=2.0.0',
+#        'requests>=1.2.0',
         'py>=1.4.14',
         'jsonpointer>=1.1',
-        #'audiotools', not working this way : https://github.com/tuffy/python-audio-tools.git
+        #'audiotools',
+        #not working with pip,
+        # get code from : https://github.com/tuffy/python-audio-tools.git
 
                     ],
     test_suite='tests'
-) 
+)

@@ -11,6 +11,11 @@ class SomeTestSuite(unittest.TestSuite):
             input_file="test.flac"
         )
 
+    def test_html(self): #Function stores all the modules to be tested
+        
+        x = ShowNotes()
+        print x.get_html()
+
 
 if __name__ == '__main__':
     unittest.main()
