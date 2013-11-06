@@ -1,3 +1,9 @@
+test2:
+	PYTHONPATH=. python tests/__init__.py
+
+test:
+	python ./setup.py test
+
 check : lint flake
 	echo 
 lint :

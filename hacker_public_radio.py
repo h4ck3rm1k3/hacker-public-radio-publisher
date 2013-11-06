@@ -10,7 +10,10 @@ http://jinja.pocoo.org/docs/
 
 '''
 import audiotools
+from audiotools.flac import Flac_STREAMINFO,Flac_VORBISCOMMENT
 from jinja2 import Environment
+from jinja2 import  PackageLoader
+import os 
 
 class ShowNotes(object):
     u'''
@@ -50,18 +53,60 @@ class ShowNotes(object):
         u'''
         read the file
         '''
-        self.audio_file = audiotools.open_files(
+        files = audiotools.open_files(
             [
                 self.input_file
             ]
         )
+        self.audio_file = files[0]
 
     def read_metadata(self):
         '''
         read metadata from the file
         '''
         self.audio_metadata = self.audio_file.get_metadata()
-        print(self.audio_metadata)
+
+        streaminfo = self.audio_metadata.get_block(Flac_STREAMINFO.BLOCK_ID)
+
+
+
+        self.metadata['md5sum']          = str(streaminfo.md5sum)
+        self.metadata['total_sample']    = streaminfo.total_samples
+        self.metadata['bits_per_sample'] = streaminfo.bits_per_sample
+        self.metadata['channels']        = streaminfo.channels
+        self.metadata['sample_rate']     = streaminfo.sample_rate
+        self.metadata['file_size']       = os.path.getsize(self.input_file)
+
+        comments = self.audio_metadata.get_block(Flac_VORBISCOMMENT.BLOCK_ID)
+#        print comments.__dict__
+#        print comments
+#        print comments.comment_strings
+        for comment in comments.comment_strings:
+            (tag, value) = comment.split(u"=", 1)
+            self.metadata[tag]=value
+
+        # for field in (
+        #         u'Artist Email', 
+        #         u'DATE', 
+        #         u'Contains Intro', 
+        #         u'TITLE', 
+        #         u'TRACKNUMBER', 
+        #         u'Twitter Description', 
+        #         u'License', 
+        #         u'Artist Number', 
+        #         u'COMMENTS', 
+        #         u'Tags', 
+        #         u'ALBUM', 
+        #         u'Series', 
+        #         u'Artist Handle', 
+        #         u'Slot', 
+        #         u'GENRE', 
+        #         u'ARTIST' ):            
+        #     v= getattr(comments,field)
+        #     print field, v 
+            
+            #u'reference libFLAC 1.3.0 20130526'
+            #print(self.audio_metadata)
 
     def get_metadata(self, name, default=None):
         '''
@@ -82,18 +127,41 @@ class ShowNotes(object):
          http://hackerpublicradio.org/sample_shownotes.html
          http://hackerpublicradio.org/sample_shownotes.txt
         '''
-        env = Environment()
+        loader=PackageLoader('hpr', 'templates')
+        env = Environment(loader=loader)
         template_file = self.get_metadata(
             "template_file",
             default="shownotes.tpl"
-        )
-
+        )    
+        print template_file
         template = env.get_template( template_file )
 
         # Finally, process the template to produce our final text.
-        html = template.render( self )
+        html = template.render( self.get_dict() )
         return html
 
+    def get_input_file(self):
+        return self.input_file
+
+    def get_dict(self):
+        return {
+            "host_name" :self.get_host_name(),
+            "host_handle" :self.get_host_handle(),
+            "host_number" :self.get_host_number(),
+            "input_file" :self.get_input_file(),
+            "host_email_address" :self.get_host_email_address(),
+            "license" :self.get_license(),
+            "title" :self.get_title(),
+            "slot" :self.get_slot(),
+            "series" :self.get_series(),
+            "tags" :self.get_tags(),
+            "explicit" :self.get_explicit(),
+            "twitter_summary" :self.get_twitter_summary(),
+            "format" :self.get_format(),
+            "shownotes_text" :self.get_shownotes_text(),
+            "filename" :self.get_filename(),
+            "intro_added" :self.get_intro_added(),
+        }
 
     def get_host_name(self):
         u'''
@@ -134,6 +202,9 @@ class ShowNotes(object):
             "License",
             default="http://creativecommons.org/licenses/by-sa/3.0/"
         )
+
+    def set_title(self,value):
+        return self.set_metadata("TITLE",value)
 
     def get_title(self):
         u'''
@@ -241,7 +312,7 @@ class ShowNotes(object):
         4. Intro and Outro Added:
         YES or NO
         '''
-        value = self.get_metadata("Contains Intro")
+        value = self.get_metadata("Contains Intro", default="N")
         if value[0] == "Y" :
             return True
         return False
@@ -312,5 +383,6 @@ def publish_show(
     """
     show = ShowNotes()
     show.set_input_file( input_file )
+    #TODO: not finished yet
 
-
+    

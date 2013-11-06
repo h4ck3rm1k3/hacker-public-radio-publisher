@@ -23,6 +23,7 @@ setup(
     },
     install_requires =
     [
+        'nose',
         'ftputil>=2.8',
         'internetarchive>=0.4.4',
         'Jinja>=1.2',
@@ -39,5 +40,6 @@ setup(
         # get code from : https://github.com/tuffy/python-audio-tools.git
 
                     ],
-    test_suite='tests'
+
+    test_suite = 'nose.collector'
 )
