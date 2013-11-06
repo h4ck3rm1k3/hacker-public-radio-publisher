@@ -394,9 +394,9 @@ class ShowNotes(object):
         p=secret.get_hpr_ftp_password()
 
         with ftputil.FTPHost(s, u, p) as host:
-            names = host.listdir("/")
-            for name in names:
-                print name
+#            names = host.listdir("/")
+#            for name in names:
+#                print name
                 #if host.path.isfile(name):
                     # remote name, local name, binary mode
                     #host.download(name, name, 'b')
@@ -422,31 +422,39 @@ class ShowNotes(object):
         with ftputil.FTPHost(s, u, p) as host:
             path = '/temp_dir_please_ignore'
 
-            self.remove_temp(host)
+            #self.remove_temp(host)
 
-            try :
-                host.rmdir(path)
-            except:
-                pass
-
+            #try :
+            #    host.rmdir(path)
+            #except:
+            #    pass
             try :
                 host.mkdir(path)
             except:
                 pass
 
+            names = host.listdir("/temp_dir_please_ignore/")
+            print names 
+                
           
             flac = self.get_filename() + ".flac"
             html = self.get_filename() + ".html"
 
-            try :
-                host.upload(flac, path + "/" + flac, mode='', callback=ftp_upload_cb)
-            except:
-                pass
-
-            try :
-                host.upload(html, path + "/" + html, mode='', callback=ftp_upload_cb)
-            except:
-                pass
+            if not flac in  names:
+                try :
+                    host.upload(flac, path + "/" + flac, mode='', callback=ftp_upload_cb)
+                except:
+                    pass
+            else:
+                print "skip %s" % flac
+                    
+            if not html in names:
+                try :
+                    host.upload(html, path + "/" + html, mode='', callback=ftp_upload_cb)
+                except:
+                    pass
+            else:
+                print "skip %s" % html
 
     def put_archive_org(self):
         '''
