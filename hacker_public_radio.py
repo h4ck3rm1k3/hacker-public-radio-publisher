@@ -23,7 +23,7 @@ def progress_update(a, chunk):
     print a, chunk
 
 def ftp_upload_cb(chunk):
-    print chunk
+    print "uploaded chunk ."
 
 
 class ShowNotes(object):
@@ -341,6 +341,12 @@ class ShowNotes(object):
         prepend intro.flac
         append outro.flac
         '''
+        
+        output_filename = self.get_filename() + ".flac" 
+        if (os.path.exists(output_filename)):
+            return
+
+        output_filename =audiotools.Filename(output_filename)
 
         intro = audiotools.open_files(    [        'intro.flac',    ])
         content = audiotools.open_files(    [        'test.flac',    ])
@@ -351,8 +357,7 @@ class ShowNotes(object):
             content[0],
             outro[0],
         ]
-
-        output_filename = audiotools.Filename(self.get_filename() + ".flac")
+        
         AudioType = audiotools.filename_to_type("info.flac")
         metadata = content[0].get_metadata() 
         output_class = AudioType
@@ -396,12 +401,15 @@ class ShowNotes(object):
                     # remote name, local name, binary mode
                     #host.download(name, name, 'b')
 
-            names = host.listdir("/temp_dir_please_ignore ")
+            names = host.listdir("/temp_dir_please_ignore/")
             for name in names:
-                print name
+                print "/temp_dir_please_ignore/" + name
 
-                    
-
+    def remove_temp(self, host):
+        names = host.listdir("/temp_dir_please_ignore/")
+        for name in names:
+            print " to remove /temp_dir_please_ignore/" + name
+            host.remove("/temp_dir_please_ignore/" + name)
 
     def put_main_ftp(self):
         '''
@@ -413,12 +421,32 @@ class ShowNotes(object):
 
         with ftputil.FTPHost(s, u, p) as host:
             path = '/temp_dir_please_ignore'
-            host.mkdir(path)
-           
-            flac = self.get_filename() + ".html"
+
+            self.remove_temp(host)
+
+            try :
+                host.rmdir(path)
+            except:
+                pass
+
+            try :
+                host.mkdir(path)
+            except:
+                pass
+
+          
+            flac = self.get_filename() + ".flac"
             html = self.get_filename() + ".html"
-            host.upload(flac, path + "/" + flac, mode='', callback=ftp_upload_cb)
-            host.upload(html, path + "/" + html, mode='', callback=ftp_upload_cb)
+
+            try :
+                host.upload(flac, path + "/" + flac, mode='', callback=ftp_upload_cb)
+            except:
+                pass
+
+            try :
+                host.upload(html, path + "/" + html, mode='', callback=ftp_upload_cb)
+            except:
+                pass
 
     def put_archive_org(self):
         '''
