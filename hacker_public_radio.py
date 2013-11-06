@@ -14,6 +14,17 @@ from audiotools.flac import Flac_STREAMINFO,Flac_VORBISCOMMENT
 from jinja2 import Environment
 from jinja2 import  PackageLoader
 import os 
+import ftputil
+import secret # passwords
+import sys
+import os.path
+
+def progress_update(a, chunk):
+    print a, chunk
+
+def ftp_upload_cb(chunk):
+    print chunk
+
 
 class ShowNotes(object):
     u'''
@@ -65,11 +76,7 @@ class ShowNotes(object):
         read metadata from the file
         '''
         self.audio_metadata = self.audio_file.get_metadata()
-
         streaminfo = self.audio_metadata.get_block(Flac_STREAMINFO.BLOCK_ID)
-
-
-
         self.metadata['md5sum']          = str(streaminfo.md5sum)
         self.metadata['total_sample']    = streaminfo.total_samples
         self.metadata['bits_per_sample'] = streaminfo.bits_per_sample
@@ -133,12 +140,19 @@ class ShowNotes(object):
             "template_file",
             default="shownotes.tpl"
         )    
-        print template_file
+        #print template_file
         template = env.get_template( template_file )
 
         # Finally, process the template to produce our final text.
         html = template.render( self.get_dict() )
         return html
+
+    def emit_html(self):
+        h= self.get_html()
+        o = open (self.get_filename() + ".html","w")
+        o.write(h)
+        o.flush()
+        o.close()
 
     def get_input_file(self):
         return self.input_file
@@ -299,11 +313,14 @@ class ShowNotes(object):
         '''
         host_number = self.get_host_number()
         host_name = self.get_host_name()
-        return "%s_%s_%s" % (
+        infilename = self.input_file.replace(".flac", "")
+        filename =  "%s_%s_%s" % (
             host_number,
             host_name,
-            self.input_file
+            infilename
         )
+        filename = filename.replace(" ","_")
+        return filename 
 
 ## Processing
 
@@ -324,7 +341,34 @@ class ShowNotes(object):
         prepend intro.flac
         append outro.flac
         '''
-        pass
+
+        intro = audiotools.open_files(    [        'intro.flac',    ])
+        content = audiotools.open_files(    [        'test.flac',    ])
+        outro = audiotools.open_files(    [        'outro.flac',    ])
+
+        audiofiles = [
+            intro[0],
+            content[0],
+            outro[0],
+        ]
+
+        output_filename = audiotools.Filename(self.get_filename() + ".flac")
+        AudioType = audiotools.filename_to_type("info.flac")
+        metadata = content[0].get_metadata() 
+        output_class = AudioType
+        #print audiofiles
+        pcms = ([af.to_pcm() for af in audiofiles])
+        #print [r.bits_per_sample for r in pcms]
+
+        encoded = output_class.from_pcm(
+            str(output_filename),
+            audiotools.PCMReaderProgress(
+                audiotools.PCMCat(pcms),
+                sum([af.total_frames() for af in audiofiles]),
+                progress_update),
+            #output_quality,
+            total_pcm_frames=sum([af.total_frames() for af in audiofiles]))
+        encoded.set_metadata(metadata)
 
     def announce_mailing(self):
         '''
@@ -336,11 +380,45 @@ class ShowNotes(object):
         '''
         pass
 
+    def ls_main_ftp(self):
+        '''
+        ftputil
+        '''
+        s=secret.get_hpr_ftp_server()
+        u=secret.get_hpr_ftp_username()
+        p=secret.get_hpr_ftp_password()
+
+        with ftputil.FTPHost(s, u, p) as host:
+            names = host.listdir("/")
+            for name in names:
+                print name
+                #if host.path.isfile(name):
+                    # remote name, local name, binary mode
+                    #host.download(name, name, 'b')
+
+            names = host.listdir("/temp_dir_please_ignore ")
+            for name in names:
+                print name
+
+                    
+
+
     def put_main_ftp(self):
         '''
         ftputil
         '''
-        pass
+        s=secret.get_hpr_ftp_server()
+        u=secret.get_hpr_ftp_username()
+        p=secret.get_hpr_ftp_password()
+
+        with ftputil.FTPHost(s, u, p) as host:
+            path = '/temp_dir_please_ignore'
+            host.mkdir(path)
+           
+            flac = self.get_filename() + ".html"
+            html = self.get_filename() + ".html"
+            host.upload(flac, path + "/" + flac, mode='', callback=ftp_upload_cb)
+            host.upload(html, path + "/" + html, mode='', callback=ftp_upload_cb)
 
     def put_archive_org(self):
         '''
