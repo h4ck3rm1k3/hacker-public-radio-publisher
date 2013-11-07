@@ -10,17 +10,21 @@ http://jinja.pocoo.org/docs/
 
 '''
 import audiotools
-from audiotools.flac import Flac_STREAMINFO,Flac_VORBISCOMMENT
+from audiotools.flac import (
+    Flac_STREAMINFO, 
+    Flac_VORBISCOMMENT)
 from jinja2 import Environment
 from jinja2 import  PackageLoader
-import os 
+import os
 import ftputil
 import secret # passwords
-import sys
 import os.path
+import re
+import tarfile
+import glob
 
-def progress_update(a, chunk):
-    print a, chunk
+def progress_update(position, chunk):
+    print position, chunk
 
 def ftp_upload_cb(chunk):
     print "uploaded chunk ."
@@ -43,6 +47,7 @@ class ShowNotes(object):
         self.audio_file = None
         self.template   = None
         self.audio_metadata = None
+        self.file_list = []
 
     def get_input_file(self):
         u'''
@@ -85,35 +90,10 @@ class ShowNotes(object):
         self.metadata['file_size']       = os.path.getsize(self.input_file)
 
         comments = self.audio_metadata.get_block(Flac_VORBISCOMMENT.BLOCK_ID)
-#        print comments.__dict__
-#        print comments
-#        print comments.comment_strings
         for comment in comments.comment_strings:
             (tag, value) = comment.split(u"=", 1)
-            self.metadata[tag]=value
+            self.metadata[tag] = value
 
-        # for field in (
-        #         u'Artist Email', 
-        #         u'DATE', 
-        #         u'Contains Intro', 
-        #         u'TITLE', 
-        #         u'TRACKNUMBER', 
-        #         u'Twitter Description', 
-        #         u'License', 
-        #         u'Artist Number', 
-        #         u'COMMENTS', 
-        #         u'Tags', 
-        #         u'ALBUM', 
-        #         u'Series', 
-        #         u'Artist Handle', 
-        #         u'Slot', 
-        #         u'GENRE', 
-        #         u'ARTIST' ):            
-        #     v= getattr(comments,field)
-        #     print field, v 
-            
-            #u'reference libFLAC 1.3.0 20130526'
-            #print(self.audio_metadata)
 
     def get_metadata(self, name, default=None):
         '''
@@ -122,7 +102,15 @@ class ShowNotes(object):
         if name in self.metadata :
             return self.metadata[name]
         else:
+            self.metadata[name]=default # store it for later use
             return default
+
+    def set_metadata(self, name, value):
+        '''
+        set one field from the metadata cache,
+        TODO: update the flac file as well
+        '''
+        self.metadata[name]=value
 
     ## acccessors for metadata
 
@@ -139,7 +127,7 @@ class ShowNotes(object):
         template_file = self.get_metadata(
             "template_file",
             default="shownotes.tpl"
-        )    
+        )
         #print template_file
         template = env.get_template( template_file )
 
@@ -148,11 +136,13 @@ class ShowNotes(object):
         return html
 
     def emit_html(self):
+        html_file=self.get_filename() + ".html"
         h= self.get_html()
-        o = open (self.get_filename() + ".html","w")
+        o = open (html_file,"w")
         o.write(h)
         o.flush()
         o.close()
+        self.add_file(html_file)
 
     def get_input_file(self):
         return self.input_file
@@ -198,9 +188,9 @@ class ShowNotes(object):
     def get_host_email_address(self):
         u'''
         1. Hostname and email address:
-        Ken Fallon (ken.fallon.nospam@nospam.gmail.com)
+        First Lastname (email.nospam@nospam.gmail.com)
         '''
-        self.get_metadata("Artist Email")
+        return self.get_metadata("Artist Email")
 
     def get_license(self):
         u'''
@@ -245,26 +235,26 @@ class ShowNotes(object):
         u'''
          5. Series/Tags:
         '''
-        self.get_metadata("Series")
+        return self.get_metadata("Series")
 
     def get_tags(self):
         u'''
-        TODO:
+        TODO: where do they come from?
         '''
-        self.get_metadata("Tags")
+        return self.get_metadata("Tags")
 
     def get_explicit(self):
         u'''
         6. Explicit:
         "Yes", or "Clean" (See iTunes for more information.)
         '''
-        self.get_metadata("Explicit", default="Clean")
+        return self.get_metadata("Explicit", default="Clean")
 
     def get_twitter_summary(self):
         u'''
         7. Twitter/Identi.CA Summary:
         '''
-        self.get_metadata("Twitter Description")
+        return self.get_metadata("Twitter Description")
 
     def get_format(self):
         u'''
@@ -284,7 +274,13 @@ class ShowNotes(object):
         '''
         we store the show notes in the comment metadata
         '''
-        self.get_metadata("COMMENTS")
+        return self.get_metadata("COMMENTS")
+
+    def set_shownotes_text(self,value):
+        '''
+        override the shownotes
+        '''
+        self.set_metadata("COMMENTS",value)
 
 ## derived
     def get_filename(self):
@@ -314,25 +310,30 @@ class ShowNotes(object):
         host_number = self.get_host_number()
         host_name = self.get_host_name()
         infilename = self.input_file.replace(".flac", "")
-        filename =  "%s_%s_%s" % (
+        filename =  "%s-%s-%s" % (
             host_number,
             host_name,
             infilename
         )
         filename = filename.replace(" ","_")
-        return filename 
+        filename = re.sub(r'[^A-Za-z0-9_-]', '_', filename)
+        return filename
 
 ## Processing
 
+    def set_intro_added(self):
+        self.set_metadata("Contains Intro", "Y")
+        
     def get_intro_added(self):
         '''
         4. Intro and Outro Added:
         YES or NO
         '''
         value = self.get_metadata("Contains Intro", default="N")
+        print "intro added value %s " % value
         if value[0] == "Y" :
-            return True
-        return False
+            return "Yes"
+        return "No"
 
     def add_intro_outtro(self):
         '''
@@ -341,25 +342,25 @@ class ShowNotes(object):
         prepend intro.flac
         append outro.flac
         '''
-        
-        output_filename = self.get_filename() + ".flac" 
+
+        output_filename = self.get_filename() + ".flac"
         if (os.path.exists(output_filename)):
             return
 
         output_filename =audiotools.Filename(output_filename)
 
-        intro = audiotools.open_files(    [        'intro.flac',    ])
-        content = audiotools.open_files(    [        'test.flac',    ])
-        outro = audiotools.open_files(    [        'outro.flac',    ])
+        intro = audiotools.open_files(    [      'intro.flac'    ])
+        content = audiotools.open_files(  [      self.input_file    ])
+        outro = audiotools.open_files(    [      'outro.flac'    ])
 
         audiofiles = [
             intro[0],
             content[0],
             outro[0],
         ]
-        
-        AudioType = audiotools.filename_to_type("info.flac")
-        metadata = content[0].get_metadata() 
+
+        AudioType = audiotools.filename_to_type("intro.flac")
+        metadata = content[0].get_metadata()
         output_class = AudioType
         #print audiofiles
         pcms = ([af.to_pcm() for af in audiofiles])
@@ -374,6 +375,8 @@ class ShowNotes(object):
             #output_quality,
             total_pcm_frames=sum([af.total_frames() for af in audiofiles]))
         encoded.set_metadata(metadata)
+
+        self.set_intro_added()
 
     def announce_mailing(self):
         '''
@@ -394,13 +397,6 @@ class ShowNotes(object):
         p=secret.get_hpr_ftp_password()
 
         with ftputil.FTPHost(s, u, p) as host:
-#            names = host.listdir("/")
-#            for name in names:
-#                print name
-                #if host.path.isfile(name):
-                    # remote name, local name, binary mode
-                    #host.download(name, name, 'b')
-
             names = host.listdir("/temp_dir_please_ignore/")
             for name in names:
                 print "/temp_dir_please_ignore/" + name
@@ -411,7 +407,7 @@ class ShowNotes(object):
             print " to remove /temp_dir_please_ignore/" + name
             host.remove("/temp_dir_please_ignore/" + name)
 
-    def put_main_ftp(self):
+    def put_main_ftp(self, force=False):
         '''
         ftputil
         '''
@@ -421,40 +417,28 @@ class ShowNotes(object):
 
         with ftputil.FTPHost(s, u, p) as host:
             path = '/temp_dir_please_ignore'
-
-            #self.remove_temp(host)
-
-            #try :
-            #    host.rmdir(path)
-            #except:
-            #    pass
             try :
                 host.mkdir(path)
             except:
                 pass
 
             names = host.listdir("/temp_dir_please_ignore/")
-            print names 
-                
-          
-            flac = self.get_filename() + ".flac"
-            html = self.get_filename() + ".html"
 
-            if not flac in  names:
+            files = self.get_file_list()
+            for filename in files :
+
+                if (filename in  names):
+                    if (not force) :
+                        print "skip existing %s" % filename
+                        continue
                 try :
-                    host.upload(flac, path + "/" + flac, mode='', callback=ftp_upload_cb)
+                    host.upload(filename, 
+                                path + "/" + filename, 
+                                mode='', 
+                                callback=ftp_upload_cb)
                 except:
                     pass
-            else:
-                print "skip %s" % flac
-                    
-            if not html in names:
-                try :
-                    host.upload(html, path + "/" + html, mode='', callback=ftp_upload_cb)
-                except:
-                    pass
-            else:
-                print "skip %s" % html
+
 
     def put_archive_org(self):
         '''
@@ -488,15 +472,41 @@ class ShowNotes(object):
         '''
         pass
 
+    def add_file(self, filename):
+        self.file_list.append(filename)
 
-def publish_show(
-        input_file 
-):
-    """
-    simple accessor
-    """
-    show = ShowNotes()
-    show.set_input_file( input_file )
-    #TODO: not finished yet
+    def load_shownotes_from_file(self, filename):
+        f=open(filename)
+        notes=f.read()
+        self.set_shownotes_text(notes)
+        print notes
 
-    
+    def add_directory_as_tgz(self, dirname):
+        tarfilename = "%s.tar.gz" % self.get_filename()
+
+        if (not os.path.exists(tarfilename)):
+            print("open %s" % tarfilename)
+            tar = tarfile.open(tarfilename, "w:gz")
+            for filename in glob.glob(dirname + '/*'):
+                print("adding %s" % filename)
+                tar.add(filename)
+            tar.close()
+        self.add_file(tarfilename)
+
+    def get_file_list(self):
+        temp_list = self.file_list
+        temp_list.append(self.get_filename() + ".flac")
+        return temp_list
+
+
+# def publish_show(
+#         input_file
+# ):
+#     """
+#     simple accessor
+#     """
+#     show = ShowNotes()
+#     show.set_input_file( input_file )
+#     #TODO: not finished yet
+
+

@@ -1,5 +1,3 @@
-merge :
-	python ./merge_files.py
 
 test2:
 	PYTHONPATH=. python tests/__init__.py
@@ -14,3 +12,6 @@ lint :
 
 flake :
 	~/.local/bin/pyflakes  *.py
+
+#merge :
+#	python ./merge_files.py
