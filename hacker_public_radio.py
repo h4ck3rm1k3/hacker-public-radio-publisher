@@ -27,7 +27,9 @@ import re
 import secret as _secret  # passwords
 import sys
 import tarfile
-
+import logging
+#logging.basicConfig(filename='HPR.log',level=logging.DEBUG)
+logging.basicConfig(stream=sys.stdout,level=logging.DEBUG)
 
 def encoding_progress_update(position, chunk):
     u'''
@@ -106,7 +108,6 @@ class AudioFile(object):
         append outro.flac
         '''
 
-
         if (os.path.exists(output_filename)):
             return
 
@@ -138,6 +139,38 @@ class AudioFile(object):
             # output_quality,
             total_pcm_frames=sum([af.total_frames() for af in audiofiles]))
         encoded.set_metadata(metadata)
+
+    def get_input_file(self):
+        u'''
+        get attribute
+        '''
+        return self.input_file
+
+    def set_input_file(self, filename):
+        u'''
+        set attribute and read it
+        '''
+        self.input_file = filename
+
+    def read_audio_files():
+        self.audio_file.read_file()
+        # read metadata
+        self.audio_file.read_metadata()
+
+
+    def get_format(self):
+        return self._format
+
+    def get_dict(self):
+        u'''
+        turn the show into a dictionary
+        for the template system
+        '''
+        mydict =   self.metadata
+        mydict["format"] =self.get_format()
+        mydict["input_file"] = self.get_input_file()
+
+        return mydict
 
 
 class HPRFtp (object):
@@ -232,6 +265,7 @@ class HPRFtp (object):
                 print (str(exp))
                 pass
 
+
 class ShowNotes(object):
 
     u'''
@@ -246,27 +280,86 @@ class ShowNotes(object):
         constructor
         '''
         self.secret = _secret
-        self.input_file = None
         self.metadata = {}
         self.template = None
         self.file_list = []
         self.audio_file = AudioFile()
+        self.show_name = None
+        self._project_dir = None
+
+    def get_project_name(self):
+        logging.info('get project name: %s ' % self._project_name) 
+        return self._project_name
+
+    def set_project_name(self, value):
+        logging.info('set project name: %s ' % value) 
+        self._project_name = value
+        self.set_name(value)
 
 
-    def get_input_file(self):
-        u'''
-        get attribute
+    def get_flac_file(self):
+        filename = self.audio_file.get_input_file()
+        return filename
+
+
+    def write_config(self):
+        filename = self.get_project_dir() + "/config.py"
+        fileobj = open(filename, "w")
+        data = self.get_dict()
+        data['project_dir'] = self.get_project_dir()
+        data['project_name'] = self.get_project_name()
+        string = pprint.pformat(data)
+        fileobj.write(string)
+        fileobj.close()
+
+    def read_config(self):
+        filename = self.get_project_dir() + "/config.py"
+        fileobj = open(filename)
+        data = fileobj.read()
+        print (data)
+        obj = eval(data)
+        if 'project_dir' in obj:
+            self.set_project_dir( obj['project_dir'])
+        if 'project_dir' in obj:
+            self.set_project_dir( obj['project_dir'])
+
+    def create(self, name):
+        # create a project dir
+        self.set_project_name(name)
+        # make dirs
+        logging.info('project dir %s ' % self.get_project_dir()) 
+        if not os.path.exists(self.get_project_dir()):
+            os.makedirs(self.get_project_dir())
+        self.write_config()
+
+    def read_project(self, project_name):
+        self.set_project_name(project_name)
+        self.read_config()
+
+    def record(self, project_name):
         '''
-        return self.input_file
-
-    def set_input_file(self, filename):
-        u'''
-        set attribute and read it
+        record a project
         '''
-        self.input_file = filename
-        self.audio_file.read_file()
-        # read metadata
-        self.audio_file.read_metadata()
+        self.read_project(project_name)
+        filename = self.flac_file
+        command = "sox -b 24 -t alsa default %s" % filename
+        print (command)
+        os.system(command)
+
+    def playback(self, project_name):
+        self.read_project(project_name)
+        filename = self.flac_file
+        command = "mplayer %s" % filename
+        print (command)
+        os.system(command)
+        
+    def get_project_dir(self):
+        if self._project_dir is None :
+            self._project_dir = "./projects/%s" % self.get_project_name()
+        return self._project_dir
+
+    def set_project_dir(self, value):
+        self._project_dir = value
 
 
     def get_metadata(self, name, default=None):
@@ -325,11 +418,10 @@ class ShowNotes(object):
         turn the show into a dictionary
         for the template system
         '''
-        return {
+        mydict= {
             "host_name": self.get_host_name(),
             "host_handle": self.get_host_handle(),
             "host_number": self.get_host_number(),
-            "input_file": self.get_input_file(),
             "host_email_address": self.get_host_email_address(),
             "license": self.get_license(),
             "title": self.get_title(),
@@ -342,32 +434,38 @@ class ShowNotes(object):
             "shownotes_text": self.get_shownotes_text(),
             "filename": self.get_filename(),
             "intro_added": self.get_intro_added(),
+            "audio_file" : self.audio_file.get_dict(), 
         }
+
+#            "input_file": self.get_input_file(),
+        
+        return mydict
 
     def get_host_name(self):
         u'''
         returns the name of the show host
         '''
-        return self.get_metadata("ARTIST")
+        return self.get_metadata("ARTIST") or self.secret.get_host_fullname()
+
 
     def get_host_handle(self):
         u'''
         returns the handle of the show host
         '''
-        return self.get_metadata("Artist Handle")
+        return self.get_metadata("Artist Handle") or self.secret.get_host_name()
 
     def get_host_number(self):
         u'''
         get the artist number
         '''
-        return self.get_metadata("Artist Number")
+        return self.get_metadata("Artist Number") or self.secret.get_host_id()
 
     def get_host_email_address(self):
         u'''
         1. Hostname and email address:
         First Lastname (email.nospam@nospam.gmail.com)
         '''
-        return self.get_metadata("Artist Email")
+        return self.get_metadata("Artist Email") or self.secret.get_host_email()
 
     def get_license(self):
         u'''
@@ -394,7 +492,7 @@ class ShowNotes(object):
         u'''
         2. Show Title: The title of your show
         '''
-        return self.get_metadata("TITLE")
+        return self.get_metadata("TITLE") or "NONE"
 
     def get_slot(self):
         u'''
@@ -409,19 +507,19 @@ class ShowNotes(object):
         "Episode Number %d" or
         "Backup Shows/Don't Care"
         '''
-        return self.get_metadata("Slot", default="Next Available Slot")
+        return self.get_metadata("Slot", default="Next Available Slot") or "NONE"
 
     def get_series(self):
         u'''
          5. Series/Tags:
         '''
-        return self.get_metadata("Series")
+        return self.get_metadata("Series") or "NONE"
 
     def get_tags(self):
         u'''
         TODO: where do they come from?
         '''
-        return self.get_metadata("Tags")
+        return self.get_metadata("Tags") or "NONE"
 
     def get_explicit(self):
         u'''
@@ -434,7 +532,7 @@ class ShowNotes(object):
         u'''
         7. Twitter/Identi.CA Summary:
         '''
-        return self.get_metadata("Twitter Description")
+        return self.get_metadata("Twitter Description") or "NONE"
 
     def get_format(self):
         u'''
@@ -447,19 +545,32 @@ class ShowNotes(object):
         We mix down to mono by default so if you want stereo then
         make note of it in the shownotes.
         '''
-        return self.audio_file.file_format
+        return self.audio_file.get_format()
 
     def get_shownotes_text(self):
         '''
         we store the show notes in the comment metadata
         '''
-        return self.get_metadata("COMMENTS")
+        return self.get_metadata("COMMENTS") or "NONE"
 
     def set_shownotes_text(self, value):
         '''
         override the shownotes
         '''
         self.set_metadata("COMMENTS", value)
+
+    @property 
+    def input_file(self):
+        if self.audio_file:
+            return self.audio_file.input_file
+
+    def set_name(self, name):
+        self.show_name = name 
+        flac_file_name = self.get_filename() + ".flac"
+        self.audio_file.set_input_file(self.get_project_dir() 
+                                       + "/"+
+                                       flac_file_name)
+
 
 # derived
     def get_filename(self):
@@ -488,7 +599,8 @@ class ShowNotes(object):
         '''
         host_number = self.get_host_number()
         host_name = self.get_host_name()
-        infilename = self.input_file.replace(".flac", "")
+
+        infilename = self.show_name
         filename = "%s-%s-%s" % (
             host_number,
             host_name,
@@ -605,13 +717,14 @@ class ShowNotes(object):
         temp_list = self.file_list
         temp_list.append(self.get_filename() + ".flac")
         return temp_list
+
 # def publish_show(
 #         input_file
 # ):
 #     """
 #     simple accessor
 #     """
-#     show = ShowNotes()
+
 #     show.set_input_file( input_file )
 # TODO: not finished yet
 
@@ -628,97 +741,28 @@ def usage():
     )
 
 
-class Project:
-
-    def __init__(self):
-        self._project_name = None
-        self._project_dir = None
-        self._show_notes = ShowNotes()
-
-
-    @property
-    def project_name(self):
-        return self._project_name
-
-    @project_name.setter
-    def project_name(self, value):
-        self._project_name = value
-        self.project_dir = "./projects/%s" % self.project_name
-
-    @property
-    def project_dir(self):
-        return self._project_dir
-
-    @project_dir.setter
-    def project_dir(self, value):
-        self._project_dir = value
-
-    @property
-    def flac_file(self):
-        filename = self.project_dir + "/recording.flac"
-        return filename
-
-
-    def write_config(self):
-        filename = self.project_dir + "/config.py"
-        fileobj = open(filename, "w")
-        data = self._show_notes.get_dict()
-        data['project_dir'] = self.project_dir
-        data['project_name'] = self.project_name
-        string = pprint.pformat(data)
-        fileobj.write(string)
-        fileobj.close()
-
-    def read_config(self):
-        filename = self.project_dir + "/config.py"
-        fileobj = open(filename)
-        data = fileobj.read()
-        print (data)
-        obj = eval(data)
-        if 'project_dir' in obj:
-            self.project_dir = obj['project_dir']
-        if 'project_dir' in obj:
-            self.project_dir = obj['project_dir']
-
-    def create(self, name):
-        # create a project dir
-        self.project_name(name)
-
-        # make dirs
-        if not os.stat(self.project_dir):
-            os.makedirs(self.project_dir)
-        self.write_config()
-
-    def read_project(self, project_name):
-        self.project_name(project_name)
-        self.read_config()
-
-
-    def record(self, project_name):
-        '''
-        record a project
-        '''
-        self.read_project(project_name)
-        filename = self.flac_file
-        command = "sox -b 24 -t alsa default %s" % filename
-        print (command)
-        os.system(command)
-
-    def playback(self, project_name):
-        self.read_project(project_name)
-        filename = self.flac_file
-        command = "mplayer %s" % filename
-        print (command)
-        os.system(command)
 
 def main():
-    project = Project()
+    project = ShowNotes()
     try:
         opts, args = getopt.getopt(sys.argv[1:], "hc:r:p:x:", ["help",
                                                                "create=",
                                                                "record=",
                                                                "playback=",
-                                                               "publish="
+                                                               "publish=",
+                                                               "load=",
+                                                               "save-"
+"--series"):
+"--shownotes"):
+"--shownotes_file"):
+"--summary"):
+"--tag"):
+"--title"):
+"-p", "--playback"):
+"-r", "--record"):
+"-x", "--publish"):
+
+
                                                                ])
     except getopt.GetoptError as err:
         # print help information and exit:
@@ -734,7 +778,16 @@ def main():
             sys.exit()
 
         elif o in ("-c", "--create"):
+            logging.info('create project %s ' % a) # 
             project.create(a)
+
+        elif o in ("--load"):
+            logging.info('load project %s ' % a) # 
+            project.load(a)
+
+        elif o in ("--save"):
+            logging.info('save project %s ' % a) # 
+            project.save(a)
 
         elif o in ("-r", "--record"):
             project.record(a)
@@ -745,9 +798,28 @@ def main():
         elif o in ("-p", "--playback"):
             project.playback(a)
 
+        elif o in ("--series"):
+            project.set_series(a)
+
+        elif o in ("--shownotes_file"):
+            project.load_shownotes_from_file(a)
+
+        elif o in ("--shownotes"):
+            project.set_shownotes(a)
+
+        elif o in ("--tag"):
+            project.add_tags(a)
+
+        elif o in ("--title"):
+            project.set_title(a)
+
+        elif o in ("--summary"):
+            project.set_twitter_summary(a)
+
         else:
             assert False, "unhandled option"
 
 
 if __name__ == "__main__":
     main()
+

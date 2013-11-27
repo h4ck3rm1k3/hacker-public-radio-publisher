@@ -1,6 +1,7 @@
 
 test_new :
 	python ./hacker_public_radio.py --create test123
+	cat projects/test123/config.py
 
 test2:
 	PYTHONPATH=. python tests/__init__.py
