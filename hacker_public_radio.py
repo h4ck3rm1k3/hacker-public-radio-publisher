@@ -2,8 +2,6 @@ u'''
 python module for HPR broadcasting
 based on :http://hackerpublicradio.org/README.txt
 # Version 11: 2013-10-31T19:42:37Z (Thursday)
-# Hi Host,
-# Thank you for producing a show for the HPR network.
 
 Templating using jinja
 http://jinja.pocoo.org/docs/
@@ -509,4 +507,107 @@ class ShowNotes(object):
 #     show.set_input_file( input_file )
 #     #TODO: not finished yet
 
+import getopt, sys
+import os 
+def usage():
+    print (
+        "--help \n"
+        "--create=project name  : create the project \n"
+        "--record=project name  : record this projects audio file \n"
+        "--playback=projectname : playback the recorded audio file \n"
+        "\n"
+    )
 
+class Project :
+
+    def __init__(self):
+        self.project_name =  None
+        self.project_dir =  None
+
+    def set_project_name (self, name):
+        self.project_name = name
+        self.project_dir ="./projects/%s" % self.project_name
+
+    def write_config(self):
+        filename = self.project_dir + "/config.py"
+        f = open(filename,"w")
+        f.write(str(self.__dict__))
+        f.close()
+
+    def read_config(self):
+        filename = self.project_dir + "/config.py"
+        f = open(filename)
+        data= f.read()
+        print (data)
+        obj = eval(data)
+        if 'project_dir' in obj:
+            self.project_dir = obj['project_dir'] 
+        if 'project_dir' in obj:
+            self.project_dir = obj['project_dir'] 
+                
+    def create(self, name):
+        # create a project dir    
+        self.set_project_name(name)
+
+        # make dirs
+        if not os.stat(self.project_dir):
+            os.makedirs(self.project_dir)
+        self.write_config()
+
+    def get_flac_file(self,project_name):
+        self.set_project_name(project_name)
+        self.read_config()
+        filename = self.project_dir + "/recording.flac"
+        return filename
+
+    def record(self, project_name):
+        filename =  self.get_flac_file(project_name)
+        command = "sox -b 24 -t alsa default %s" % filename
+        print (command)
+        os.system (command)
+
+    def playback(self, project_name):
+        filename =  self.get_flac_file(project_name)
+        command = "mplayer %s" % filename
+        print (command)
+        os.system (command)
+    
+p = Project()
+    
+def main():
+    try:
+        opts, args = getopt.getopt(sys.argv[1:], "hc:r:p:", ["help", 
+                                                           "create=",
+                                                           "record=",
+                                                           "playback="
+                                                     ])
+    except getopt.GetoptError as err:
+        # print help information and exit:
+        print str(err) # will print something like "option -a not recognized"
+        usage()
+        sys.exit(2)
+    output = None
+    verbose = False
+    for o, a in opts:
+        if o == "-v":
+            verbose = True
+
+        elif o in ("-h", "--help"):
+            usage()
+            sys.exit()
+
+        elif o in ("-c", "--create"):
+            p.create(a)
+
+        elif o in ("-r", "--record"):
+            p.record(a)
+
+        elif o in ("-p", "--playback"):
+            p.playback(a)
+
+        else:
+            assert False, "unhandled option"
+
+
+if __name__ == "__main__":
+    main()

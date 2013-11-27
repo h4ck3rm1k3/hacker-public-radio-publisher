@@ -10,7 +10,7 @@ def create_show(force): #create a show
     x = ShowNotes()
     #x.ls_main_ftp()
     x.set_input_file( "example_show/test.flac" )
-    x.set_intro_added()
+
     x.load_shownotes_from_file("example_show/html_notes.html")
     x.add_directory_as_tgz('example_show/datafiles/')
     print x.get_filename()
