@@ -576,10 +576,11 @@ p = Project()
     
 def main():
     try:
-        opts, args = getopt.getopt(sys.argv[1:], "hc:r:p:", ["help", 
+        opts, args = getopt.getopt(sys.argv[1:], "hc:r:p:x:", ["help", 
                                                            "create=",
                                                            "record=",
-                                                           "playback="
+                                                           "playback=",
+                                                             "publish="
                                                      ])
     except getopt.GetoptError as err:
         # print help information and exit:
@@ -600,6 +601,9 @@ def main():
             p.create(a)
 
         elif o in ("-r", "--record"):
+            p.record(a)
+
+        elif o in ("-x", "--publish"):
             p.record(a)
 
         elif o in ("-p", "--playback"):
