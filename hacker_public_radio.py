@@ -6,62 +6,66 @@ based on :http://hackerpublicradio.org/README.txt
 Templating using jinja
 http://jinja.pocoo.org/docs/
 
+code :
+copyright 2013 James Michael DuPont
+distributed under the AGPL v3
+
 '''
 import audiotools
 from audiotools.flac import (
-    Flac_STREAMINFO, 
+    Flac_STREAMINFO,
     Flac_VORBISCOMMENT)
 from jinja2 import Environment
-from jinja2 import  PackageLoader
-import os
+from jinja2 import PackageLoader
 import ftputil
-import secret # passwords
-import os.path
-import re
-import tarfile
+import getopt
 import glob
+import os
+import os.path
+import pprint
+import re
+import secret as _secret  # passwords
+import sys
+import tarfile
 
-def progress_update(position, chunk):
+
+def encoding_progress_update(position, chunk):
+    u'''
+    called when flac encoding has updated its progress
+    '''
     print position, chunk
 
+
 def ftp_upload_cb(chunk):
+    u'''
+    callback when a chunk is uploaded
+    '''
     print "uploaded chunk ."
 
-
-class ShowNotes(object):
+class AudioFile(object):
     u'''
-    SHOWNOTES:
-    All shows must include an associated show note text file. We
-    will use this information to fill out the website. The
-    headings of the file must be as follows:
+    Audio file, encapsulates all the audio files methods
     '''
-
-    def __init__(self ):
+    def __init__(self):
         '''
         constructor
         '''
         self.input_file = None
-        self.metadata   = {}
         self.audio_file = None
-        self.template   = None
         self.audio_metadata = None
-        self.file_list = []
+        self._format = "FLAC"
+        # the audio metdata
+        self.metadata = {}
 
-    def get_input_file(self):
-        u'''
-        get attribute
+    @property
+    def file_format(self):
         '''
-        return self.input_file
-
-    def set_input_file(self, filename):
-        u'''
-        set attribute and read it
+        get property of file format,
+        will always be flac for now
+        will want to support wav files and conversions,
+        so if this is not flac, then we will convert it for the user
         '''
-        self.input_file = filename
-        self.read_file()
-        #read metadata
-        self.read_metadata()
-
+        return self._format
 
     def read_file(self):
         u'''
@@ -80,27 +84,199 @@ class ShowNotes(object):
         '''
         self.audio_metadata = self.audio_file.get_metadata()
         streaminfo = self.audio_metadata.get_block(Flac_STREAMINFO.BLOCK_ID)
-        self.metadata['md5sum']          = str(streaminfo.md5sum)
-        self.metadata['total_sample']    = streaminfo.total_samples
+        self.metadata['md5sum'] = str(streaminfo.md5sum)
+        self.metadata['total_sample'] = streaminfo.total_samples
         self.metadata['bits_per_sample'] = streaminfo.bits_per_sample
-        self.metadata['channels']        = streaminfo.channels
-        self.metadata['sample_rate']     = streaminfo.sample_rate
-        self.metadata['file_size']       = os.path.getsize(self.input_file)
+        self.metadata['channels'] = streaminfo.channels
+        self.metadata['sample_rate'] = streaminfo.sample_rate
+        self.metadata['file_size'] = os.path.getsize(self.input_file)
 
         comments = self.audio_metadata.get_block(Flac_VORBISCOMMENT.BLOCK_ID)
         for comment in comments.comment_strings:
             (tag, value) = comment.split(u"=", 1)
             self.metadata[tag] = value
 
+    def add_intro_outtro(self, output_filename):
+        '''
+        output_filename = self.get_filename() + ".flac"
+
+        Please add the intro and outro clips.
+        http://audiotools.sourceforge.net/install.html
+        prepend intro.flac
+        append outro.flac
+        '''
+
+
+        if (os.path.exists(output_filename)):
+            return
+
+        output_filename = audiotools.Filename(output_filename)
+
+        intro = audiotools.open_files(['intro.flac'])
+        content = audiotools.open_files([self.input_file])
+        outro = audiotools.open_files(['outro.flac'])
+
+        audiofiles = [
+            intro[0],
+            content[0],
+            outro[0],
+        ]
+
+        audio_type = audiotools.filename_to_type("intro.flac")
+        metadata = content[0].get_metadata()
+        output_class = audio_type
+        # print audiofiles
+        pcms = ([af.to_pcm() for af in audiofiles])
+        # print [r.bits_per_sample for r in pcms]
+
+        encoded = output_class.from_pcm(
+            str(output_filename),
+            audiotools.PCMReaderProgress(
+                audiotools.PCMCat(pcms),
+                sum([af.total_frames() for af in audiofiles]),
+                encoding_progress_update),
+            # output_quality,
+            total_pcm_frames=sum([af.total_frames() for af in audiofiles]))
+        encoded.set_metadata(metadata)
+
+
+class HPRFtp (object):
+    '''
+    wrapper for the hpr ftp site, takes a show and processes it.
+    '''
+
+    def __init__(self, show):
+        self._show = show
+        self._host = None # call login
+
+    @property
+    def show(self):
+        """
+        returns the show
+        """        
+        return self._show
+
+    @property
+    def secret(self):
+        """
+        returns the secret from the show
+        """        
+        return self.show.secret
+
+    @property 
+    def host (self):
+        """
+        logs in or returns the last one
+        TODO: add a logout function 
+        """        
+        if self._host :
+            return self._host
+        else:
+            return self.login()
+
+    def login(self):
+        '''
+        create a host object
+        '''
+        server = self.secret.get_hpr_ftp_server()
+        user = self.secret.get_hpr_ftp_username()
+        password = self.secret.get_hpr_ftp_password()
+
+        self._host = ftputil.FTPHost(server,
+                             user,
+                             password)
+
+    def ls_main_ftp(self):
+        '''
+        ftputil
+        '''
+        names = self.host.listdir("/temp_dir_please_ignore/")
+        for name in names:
+            print "/temp_dir_please_ignore/" + name
+
+    def remove_temp(self, host):
+        '''
+        remove the temp dir from the ftp server
+        '''
+        names = self.host.listdir("/temp_dir_please_ignore/")
+        for name in names:
+            print " to remove /temp_dir_please_ignore/" + name
+            host.remove("/temp_dir_please_ignore/" + name)
+
+    def put_main_ftp(self, force=False):
+        '''
+        ftputil
+        '''
+        
+        path = '/temp_dir_please_ignore'
+        try:
+            self.host.mkdir(path)
+        except Exception, exp:
+            pass
+
+        names = self.host.listdir("/temp_dir_please_ignore/")
+
+        files = self.show.get_file_list()
+        for filename in files:
+
+            if (filename in names):
+                if (not force):
+                    print "skip existing %s" % filename
+                    continue
+            try:
+                self.host.upload(filename,
+                            path + "/" + filename,
+                            mode='',
+                            callback=ftp_upload_cb)
+            except Exception, exp:
+                print (str(exp))
+                pass
+
+class ShowNotes(object):
+
+    u'''
+    SHOWNOTES:
+    All shows must include an associated show note text file. We
+    will use this information to fill out the website. The
+    headings of the file must be as follows:
+    '''
+
+    def __init__(self):
+        '''
+        constructor
+        '''
+        self.secret = _secret
+        self.input_file = None
+        self.metadata = {}
+        self.template = None
+        self.file_list = []
+        self.audio_file = AudioFile()
+
+
+    def get_input_file(self):
+        u'''
+        get attribute
+        '''
+        return self.input_file
+
+    def set_input_file(self, filename):
+        u'''
+        set attribute and read it
+        '''
+        self.input_file = filename
+        self.audio_file.read_file()
+        # read metadata
+        self.audio_file.read_metadata()
+
 
     def get_metadata(self, name, default=None):
         '''
         get one field from the metadata
         '''
-        if name in self.metadata :
+        if name in self.metadata:
             return self.metadata[name]
         else:
-            self.metadata[name]=default # store it for later use
+            self.metadata[name] = default  # store it for later use
             return default
 
     def set_metadata(self, name, value):
@@ -108,9 +284,8 @@ class ShowNotes(object):
         set one field from the metadata cache,
         TODO: update the flac file as well
         '''
-        self.metadata[name]=value
-
-    ## acccessors for metadata
+        self.metadata[name] = value
+    # acccessors for metadata
 
     def get_html(self):
         u'''
@@ -120,49 +295,53 @@ class ShowNotes(object):
          http://hackerpublicradio.org/sample_shownotes.html
          http://hackerpublicradio.org/sample_shownotes.txt
         '''
-        loader=PackageLoader('hpr', 'templates')
+        loader = PackageLoader('hpr', 'templates')
         env = Environment(loader=loader)
         template_file = self.get_metadata(
             "template_file",
             default="shownotes.tpl"
         )
-        #print template_file
-        template = env.get_template( template_file )
+        # print template_file
+        template = env.get_template(template_file)
 
         # Finally, process the template to produce our final text.
-        html = template.render( self.get_dict() )
+        html = template.render(self.get_dict())
         return html
 
     def emit_html(self):
-        html_file=self.get_filename() + ".html"
-        h= self.get_html()
-        o = open (html_file,"w")
-        o.write(h)
-        o.flush()
-        o.close()
+        u'''
+        create the the html
+        '''
+        html_file = self.get_filename() + ".html"
+        html = self.get_html()
+        output_file = open(html_file, "w")
+        output_file.write(html)
+        output_file.flush()
+        output_file.close()
         self.add_file(html_file)
 
-    def get_input_file(self):
-        return self.input_file
-
     def get_dict(self):
+        u'''
+        turn the show into a dictionary
+        for the template system
+        '''
         return {
-            "host_name" :self.get_host_name(),
-            "host_handle" :self.get_host_handle(),
-            "host_number" :self.get_host_number(),
-            "input_file" :self.get_input_file(),
-            "host_email_address" :self.get_host_email_address(),
-            "license" :self.get_license(),
-            "title" :self.get_title(),
-            "slot" :self.get_slot(),
-            "series" :self.get_series(),
-            "tags" :self.get_tags(),
-            "explicit" :self.get_explicit(),
-            "twitter_summary" :self.get_twitter_summary(),
-            "format" :self.get_format(),
-            "shownotes_text" :self.get_shownotes_text(),
-            "filename" :self.get_filename(),
-            "intro_added" :self.get_intro_added(),
+            "host_name": self.get_host_name(),
+            "host_handle": self.get_host_handle(),
+            "host_number": self.get_host_number(),
+            "input_file": self.get_input_file(),
+            "host_email_address": self.get_host_email_address(),
+            "license": self.get_license(),
+            "title": self.get_title(),
+            "slot": self.get_slot(),
+            "series": self.get_series(),
+            "tags": self.get_tags(),
+            "explicit": self.get_explicit(),
+            "twitter_summary": self.get_twitter_summary(),
+            "format": self.get_format(),
+            "shownotes_text": self.get_shownotes_text(),
+            "filename": self.get_filename(),
+            "intro_added": self.get_intro_added(),
         }
 
     def get_host_name(self):
@@ -181,7 +360,7 @@ class ShowNotes(object):
         u'''
         get the artist number
         '''
-        return self.get_metadata("Artist Number" )
+        return self.get_metadata("Artist Number")
 
     def get_host_email_address(self):
         u'''
@@ -205,8 +384,11 @@ class ShowNotes(object):
             default="http://creativecommons.org/licenses/by-sa/3.0/"
         )
 
-    def set_title(self,value):
-        return self.set_metadata("TITLE",value)
+    def set_title(self, value):
+        u'''
+        setter for the TITLE field
+        '''
+        return self.set_metadata("TITLE", value)
 
     def get_title(self):
         u'''
@@ -227,7 +409,7 @@ class ShowNotes(object):
         "Episode Number %d" or
         "Backup Shows/Don't Care"
         '''
-        return self.get_metadata("Slot", default = "Next Available Slot")
+        return self.get_metadata("Slot", default="Next Available Slot")
 
     def get_series(self):
         u'''
@@ -265,8 +447,7 @@ class ShowNotes(object):
         We mix down to mono by default so if you want stereo then
         make note of it in the shownotes.
         '''
-        return "FLAC"
-
+        return self.audio_file.file_format
 
     def get_shownotes_text(self):
         '''
@@ -274,13 +455,13 @@ class ShowNotes(object):
         '''
         return self.get_metadata("COMMENTS")
 
-    def set_shownotes_text(self,value):
+    def set_shownotes_text(self, value):
         '''
         override the shownotes
         '''
-        self.set_metadata("COMMENTS",value)
+        self.set_metadata("COMMENTS", value)
 
-## derived
+# derived
     def get_filename(self):
         u'''
         FILENAME:
@@ -308,20 +489,30 @@ class ShowNotes(object):
         host_number = self.get_host_number()
         host_name = self.get_host_name()
         infilename = self.input_file.replace(".flac", "")
-        filename =  "%s-%s-%s" % (
+        filename = "%s-%s-%s" % (
             host_number,
             host_name,
             infilename
         )
-        filename = filename.replace(" ","_")
+        filename = filename.replace(" ", "_")
         filename = re.sub(r'[^A-Za-z0-9_-]', '_', filename)
         return filename
 
-## Processing
+    def add_intro_outtro(self, output_filename):
+        '''
+        coordinates
+        '''
+        output_filename = self.get_filename() + ".flac"
+        self.audio_file.add_intro_outtro(output_filename)
+        self.set_intro_added()
 
     def set_intro_added(self):
+        '''
+        has the intro been added to the file?
+        turned on if you call the add intro method
+        '''
         self.set_metadata("Contains Intro", "Y")
-        
+
     def get_intro_added(self):
         '''
         4. Intro and Outro Added:
@@ -329,52 +520,10 @@ class ShowNotes(object):
         '''
         value = self.get_metadata("Contains Intro", default="N")
         print "intro added value %s " % value
-        if value[0] == "Y" :
+        if value[0] == "Y":
             return "Yes"
         return "No"
 
-    def add_intro_outtro(self):
-        '''
-        Please add the intro and outro clips.
-        http://audiotools.sourceforge.net/install.html
-        prepend intro.flac
-        append outro.flac
-        '''
-
-        output_filename = self.get_filename() + ".flac"
-        if (os.path.exists(output_filename)):
-            return
-
-        output_filename =audiotools.Filename(output_filename)
-
-        intro = audiotools.open_files(    [      'intro.flac'    ])
-        content = audiotools.open_files(  [      self.input_file    ])
-        outro = audiotools.open_files(    [      'outro.flac'    ])
-
-        audiofiles = [
-            intro[0],
-            content[0],
-            outro[0],
-        ]
-
-        AudioType = audiotools.filename_to_type("intro.flac")
-        metadata = content[0].get_metadata()
-        output_class = AudioType
-        #print audiofiles
-        pcms = ([af.to_pcm() for af in audiofiles])
-        #print [r.bits_per_sample for r in pcms]
-
-        encoded = output_class.from_pcm(
-            str(output_filename),
-            audiotools.PCMReaderProgress(
-                audiotools.PCMCat(pcms),
-                sum([af.total_frames() for af in audiofiles]),
-                progress_update),
-            #output_quality,
-            total_pcm_frames=sum([af.total_frames() for af in audiofiles]))
-        encoded.set_metadata(metadata)
-
-        self.set_intro_added()
 
     def announce_mailing(self):
         '''
@@ -385,58 +534,6 @@ class ShowNotes(object):
         http://hackerpublicradio.org/mailman/listinfo/hpr_hackerpublicradio.org
         '''
         pass
-
-    def ls_main_ftp(self):
-        '''
-        ftputil
-        '''
-        s=secret.get_hpr_ftp_server()
-        u=secret.get_hpr_ftp_username()
-        p=secret.get_hpr_ftp_password()
-
-        with ftputil.FTPHost(s, u, p) as host:
-            names = host.listdir("/temp_dir_please_ignore/")
-            for name in names:
-                print "/temp_dir_please_ignore/" + name
-
-    def remove_temp(self, host):
-        names = host.listdir("/temp_dir_please_ignore/")
-        for name in names:
-            print " to remove /temp_dir_please_ignore/" + name
-            host.remove("/temp_dir_please_ignore/" + name)
-
-    def put_main_ftp(self, force=False):
-        '''
-        ftputil
-        '''
-        s=secret.get_hpr_ftp_server()
-        u=secret.get_hpr_ftp_username()
-        p=secret.get_hpr_ftp_password()
-
-        with ftputil.FTPHost(s, u, p) as host:
-            path = '/temp_dir_please_ignore'
-            try :
-                host.mkdir(path)
-            except:
-                pass
-
-            names = host.listdir("/temp_dir_please_ignore/")
-
-            files = self.get_file_list()
-            for filename in files :
-
-                if (filename in  names):
-                    if (not force) :
-                        print "skip existing %s" % filename
-                        continue
-                try :
-                    host.upload(filename, 
-                                path + "/" + filename, 
-                                mode='', 
-                                callback=ftp_upload_cb)
-                except:
-                    pass
-
 
     def put_archive_org(self):
         '''
@@ -471,15 +568,25 @@ class ShowNotes(object):
         pass
 
     def add_file(self, filename):
+        '''
+        adds a file to the list of files to be uploaded in the show
+        '''
         self.file_list.append(filename)
 
     def load_shownotes_from_file(self, filename):
-        f=open(filename)
-        notes=f.read()
+        '''
+        reads the shownotes from a file
+        '''
+        fileobj = open(filename)
+        notes = fileobj.read()
         self.set_shownotes_text(notes)
         print notes
 
     def add_directory_as_tgz(self, dirname):
+        '''
+        adds a whole directory as tar gz file to the list
+        this is good for packing up source code and things.
+        '''
         tarfilename = "%s.tar.gz" % self.get_filename()
 
         if (not os.path.exists(tarfilename)):
@@ -492,11 +599,12 @@ class ShowNotes(object):
         self.add_file(tarfilename)
 
     def get_file_list(self):
+        '''
+        produce the file list and add the flac file to it.
+        '''
         temp_list = self.file_list
         temp_list.append(self.get_filename() + ".flac")
         return temp_list
-
-
 # def publish_show(
 #         input_file
 # ):
@@ -505,10 +613,11 @@ class ShowNotes(object):
 #     """
 #     show = ShowNotes()
 #     show.set_input_file( input_file )
-#     #TODO: not finished yet
+# TODO: not finished yet
 
-import getopt, sys
-import os 
+
+
+
 def usage():
     print (
         "--help \n"
@@ -518,96 +627,123 @@ def usage():
         "\n"
     )
 
-class Project :
+
+class Project:
 
     def __init__(self):
-        self.project_name =  None
-        self.project_dir =  None
+        self._project_name = None
+        self._project_dir = None
+        self._show_notes = ShowNotes()
 
-    def set_project_name (self, name):
-        self.project_name = name
-        self.project_dir ="./projects/%s" % self.project_name
+
+    @property
+    def project_name(self):
+        return self._project_name
+
+    @project_name.setter
+    def project_name(self, value):
+        self._project_name = value
+        self.project_dir = "./projects/%s" % self.project_name
+
+    @property
+    def project_dir(self):
+        return self._project_dir
+
+    @project_dir.setter
+    def project_dir(self, value):
+        self._project_dir = value
+
+    @property
+    def flac_file(self):
+        filename = self.project_dir + "/recording.flac"
+        return filename
+
 
     def write_config(self):
         filename = self.project_dir + "/config.py"
-        f = open(filename,"w")
-        f.write(str(self.__dict__))
-        f.close()
+        fileobj = open(filename, "w")
+        data = self._show_notes.get_dict()
+        data['project_dir'] = self.project_dir
+        data['project_name'] = self.project_name
+        string = pprint.pformat(data)
+        fileobj.write(string)
+        fileobj.close()
 
     def read_config(self):
         filename = self.project_dir + "/config.py"
-        f = open(filename)
-        data= f.read()
+        fileobj = open(filename)
+        data = fileobj.read()
         print (data)
         obj = eval(data)
         if 'project_dir' in obj:
-            self.project_dir = obj['project_dir'] 
+            self.project_dir = obj['project_dir']
         if 'project_dir' in obj:
-            self.project_dir = obj['project_dir'] 
-                
+            self.project_dir = obj['project_dir']
+
     def create(self, name):
-        # create a project dir    
-        self.set_project_name(name)
+        # create a project dir
+        self.project_name(name)
 
         # make dirs
         if not os.stat(self.project_dir):
             os.makedirs(self.project_dir)
         self.write_config()
 
-    def get_flac_file(self,project_name):
-        self.set_project_name(project_name)
+    def read_project(self, project_name):
+        self.project_name(project_name)
         self.read_config()
-        filename = self.project_dir + "/recording.flac"
-        return filename
+
 
     def record(self, project_name):
-        filename =  self.get_flac_file(project_name)
+        '''
+        record a project
+        '''
+        self.read_project(project_name)
+        filename = self.flac_file
         command = "sox -b 24 -t alsa default %s" % filename
         print (command)
-        os.system (command)
+        os.system(command)
 
     def playback(self, project_name):
-        filename =  self.get_flac_file(project_name)
+        self.read_project(project_name)
+        filename = self.flac_file
         command = "mplayer %s" % filename
         print (command)
-        os.system (command)
-    
-p = Project()
-    
+        os.system(command)
+
 def main():
+    project = Project()
     try:
-        opts, args = getopt.getopt(sys.argv[1:], "hc:r:p:x:", ["help", 
-                                                           "create=",
-                                                           "record=",
-                                                           "playback=",
-                                                             "publish="
-                                                     ])
+        opts, args = getopt.getopt(sys.argv[1:], "hc:r:p:x:", ["help",
+                                                               "create=",
+                                                               "record=",
+                                                               "playback=",
+                                                               "publish="
+                                                               ])
     except getopt.GetoptError as err:
         # print help information and exit:
-        print str(err) # will print something like "option -a not recognized"
+        print str(err)  # will print something like "option -a not recognized"
         usage()
         sys.exit(2)
-    output = None
-    verbose = False
     for o, a in opts:
         if o == "-v":
-            verbose = True
+            project.verbose = True
 
         elif o in ("-h", "--help"):
             usage()
             sys.exit()
 
         elif o in ("-c", "--create"):
-            p.create(a)
+            project.create(a)
 
         elif o in ("-r", "--record"):
-            p.record(a)
+            project.record(a)
 
         elif o in ("-x", "--publish"):
-            p.record(a)
+            project.record(a)
 
         elif o in ("-p", "--playback"):
-            p.playback(a)
+            project.playback(a)
 
         else:
             assert False, "unhandled option"
