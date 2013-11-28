@@ -367,9 +367,12 @@ class ShowNotes(object):
         get one field from the metadata
         '''
         if name in self.metadata:
-            return self.metadata[name]
+            value = self.metadata[name]
+            logging.debug("get metadata name(%s)=value(%s)" % (name,value))
+            return value
         else:
             self.metadata[name] = default  # store it for later use
+            logging.debug("setting metadata name(%s) to default(%s)" % (name,default))
             return default
 
     def set_metadata(self, name, value):
@@ -378,6 +381,7 @@ class ShowNotes(object):
         TODO: update the flac file as well
         '''
         self.metadata[name] = value
+        logging.debug("Name %s=value:%s" % (name,value))
     # acccessors for metadata
 
     def get_html(self):
@@ -511,15 +515,29 @@ class ShowNotes(object):
 
     def get_series(self):
         u'''
-         5. Series/Tags:
+         5. Series
         '''
-        return self.get_metadata("Series") or "NONE"
+        return self.get_metadata("Series", default= "NONE")
+
+    def set_series(self,value):
+        u'''
+         5. Series
+        '''
+        return self.set_metadata("Series", value)
 
     def get_tags(self):
         u'''
         TODO: where do they come from?
         '''
         return self.get_metadata("Tags") or "NONE"
+
+    def add_tags(self,value):
+        u'''
+         5. tag
+        '''
+        tags= self.get_metadata("Tags") or []
+        tags.append(value)
+        return self.set_metadata("Tags", tags)
 
     def get_explicit(self):
         u'''
@@ -532,7 +550,7 @@ class ShowNotes(object):
         u'''
         7. Twitter/Identi.CA Summary:
         '''
-        return self.get_metadata("Twitter Description") or "NONE"
+        return self.get_metadata("Twitter Description") or self.get_title()[0:144]
 
     def get_format(self):
         u'''
@@ -543,7 +561,7 @@ class ShowNotes(object):
         long as it's audible. Please upload a media file in the
         highest quality you have.
         We mix down to mono by default so if you want stereo then
-        make note of it in the shownotes.
+        make note of it in the show.
         '''
         return self.audio_file.get_format()
 
@@ -558,6 +576,44 @@ class ShowNotes(object):
         override the shownotes
         '''
         self.set_metadata("COMMENTS", value)
+
+    def load_shownotes_from_file(self, filename):
+        '''
+        reads the shownotes from a file
+        '''
+        logging.info('to load shownotes file %s ' % filename) # 
+        if (os.path.exists(filename)):
+            fileobj = open(filename)
+            notes = fileobj.read()
+            self.set_shownotes_text(notes)
+
+    def print_config(self):
+        '''
+        prints the config
+        '''
+        fileobj = open(filename)
+        notes = fileobj.read()
+        print notes
+
+    def edit_shownotes(self):
+        '''
+        edit the shownotes
+        '''
+        filename = self.get_filename() + ".txt"
+        filepath = self.get_project_dir() + "/" + filename
+        command = "emacs %s" % filepath
+        stat = os.system(command)
+        if (stat == 0):
+            self.load_shownotes_from_file(filepath)
+
+    def load_shownotes(self):
+        '''
+        edit the shownotes
+        '''
+        filename = self.get_filename() + ".txt"
+        filepath = self.get_project_dir() + "/" + filename
+        self.load_shownotes_from_file(filepath)
+
 
     @property 
     def input_file(self):
@@ -685,14 +741,6 @@ class ShowNotes(object):
         '''
         self.file_list.append(filename)
 
-    def load_shownotes_from_file(self, filename):
-        '''
-        reads the shownotes from a file
-        '''
-        fileobj = open(filename)
-        notes = fileobj.read()
-        self.set_shownotes_text(notes)
-        print notes
 
     def add_directory_as_tgz(self, dirname):
         '''
@@ -737,6 +785,18 @@ def usage():
         "--create=project name  : create the project \n"
         "--record=project name  : record this projects audio file \n"
         "--playback=projectname : playback the recorded audio file \n"
+        "--publish\n",
+        "--load=name\n",
+        "--save\n",
+        "--series=X\n",
+        "--shownotes=\n",
+        "--shownotes-file=\n",
+        "--shownotes-load\n",
+        "--shownotes-editor\n",
+        "--summary=\n",
+        "--tag=\n",
+        "--title=\n",
+        "--print-config\n",
         "\n"
     )
 
@@ -749,20 +809,18 @@ def main():
                                                                "create=",
                                                                "record=",
                                                                "playback=",
-                                                               "publish=",
+                                                               "publish",
                                                                "load=",
-                                                               "save-"
-"--series"):
-"--shownotes"):
-"--shownotes_file"):
-"--summary"):
-"--tag"):
-"--title"):
-"-p", "--playback"):
-"-r", "--record"):
-"-x", "--publish"):
-
-
+                                                               "save",
+                                                               "series=",
+                                                               "shownotes=",
+                                                               "shownotes-file=",
+                                                               "summary=",
+                                                               "tag=",
+                                                               "title=",
+                                                               "shownotes-editor",
+                                                               "shownotes-load",
+                                                               "print-config",
                                                                ])
     except getopt.GetoptError as err:
         # print help information and exit:
@@ -783,11 +841,11 @@ def main():
 
         elif o in ("--load"):
             logging.info('load project %s ' % a) # 
-            project.load(a)
+            project.read_project(a)
 
         elif o in ("--save"):
             logging.info('save project %s ' % a) # 
-            project.save(a)
+            project.write_config()
 
         elif o in ("-r", "--record"):
             project.record(a)
@@ -801,8 +859,14 @@ def main():
         elif o in ("--series"):
             project.set_series(a)
 
-        elif o in ("--shownotes_file"):
+        elif o in ("--shownotes-file"):
             project.load_shownotes_from_file(a)
+
+        elif o in ("--shownotes-editor"):
+            project.edit_shownotes()
+
+        elif o in ("--shownotes-load"):
+            project.load_shownotes()
 
         elif o in ("--shownotes"):
             project.set_shownotes(a)
@@ -816,8 +880,11 @@ def main():
         elif o in ("--summary"):
             project.set_twitter_summary(a)
 
+        elif o in ("--print-config"):
+            project.print_config()
+
         else:
-            assert False, "unhandled option"
+            assert False, "unhandled option %s" % o
 
 
 if __name__ == "__main__":
