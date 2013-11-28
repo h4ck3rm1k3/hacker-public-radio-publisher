@@ -324,7 +324,7 @@ class ShowNotes(object):
 
         fileobj = open(filename)
         data = fileobj.read()
-        print (data)
+#        print (data)
         obj = eval(data)
         if 'project_dir' in obj:
             self.set_project_dir( obj['project_dir'])
@@ -355,7 +355,7 @@ class ShowNotes(object):
             [ 'title', "TITLE"]
             ]
         ):
-            logging.info('check metadata %s ' % str(pair) )
+#            logging.info('check metadata %s ' % str(pair) )
             (name,    metadata_name) = pair
 
             if name in obj:
@@ -377,14 +377,14 @@ class ShowNotes(object):
         self.set_project_name(project_name)
         self.read_config()
 
-    def record(self, project_name):
+    def record(self):
         '''
-        record a project
+        record an already loaded project
         '''
-        self.read_project(project_name)
         filename = self.get_temp_flac_file
         command = "sox -b 24 -t alsa default %s" % filename
-        print (command)
+        logging.info('logging %s ' % command)
+        print ("hit ctrl c twice to stop recording")
         os.system(command)
 
     def playback(self, project_name):
@@ -813,10 +813,10 @@ def usage():
     print (
         "--help \n"
         "--create=project name  : create the project \n"
-        "--record=project name  : record this projects audio file \n"
-        "--playback=projectname : playback the recorded audio file \n"
+        "--load=name load the project before using it \n",
+        "--record  : record the loaded project audio file \n"
+        "--playback : playback the loaded recorded audio file \n"
         "--publish\n",
-        "--load=name\n",
         "--save\n",
         "--series=X\n",
         "--shownotes=\n",
@@ -838,7 +838,7 @@ def main():
     try:
         opts, args = getopt.getopt(sys.argv[1:], "hc:r:p:x:", ["help",
                                                                "create=",
-                                                               "record=",
+                                                               "record",
                                                                "playback=",
                                                                "publish",
                                                                "load=",
@@ -881,10 +881,10 @@ def main():
             project.write_config()
 
         elif o in ("-r", "--record"):
-            project.record(a)
+            project.record()
 
         elif o in ("-x", "--publish"):
-            project.record(a)
+            project.publish(a)
 
         elif o in ("-p", "--playback"):
             project.playback(a)
