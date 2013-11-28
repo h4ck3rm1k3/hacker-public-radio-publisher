@@ -12,6 +12,7 @@ distributed under the AGPL v3
 
 '''
 import audiotools
+from audiotools import MetaData
 from audiotools.flac import (
     Flac_STREAMINFO,
     Flac_VORBISCOMMENT)
@@ -30,8 +31,46 @@ import tarfile
 import logging
 import shutil
 
+from audiotools.vorbiscomment import VorbisComment
 #logging.basicConfig(filename='HPR.log',level=logging.DEBUG)
 logging.basicConfig(stream=sys.stdout,level=logging.DEBUG)
+
+logging.info('Attribute Map: %s ' % VorbisComment.ATTRIBUTE_MAP)
+
+#  {'comment': u'COMMENT',   
+#   'media': u'SOURCE MEDIUM', 
+#   'album_total': u'DISCTOTAL', 
+#    'copyright': u'COPYRIGHT', 
+#    'publisher': u'PUBLISHER', 
+#    'composer_name': u'COMPOSER', 
+#    'album_number': u'DISCNUMBER', 
+#    'year': u'DATE', 
+#    'track_total': u'TRACKTOTAL', 
+#    'artist_name': u'ARTIST', 
+#    'track_number': u'TRACKNUMBER', 
+#    'catalog': u'CATALOG', 
+#    'track_name': u'TITLE', 
+#    'performer_name': u'PERFORMER', 
+#    'conductor_name': u'CONDUCTOR', 
+#    'ISRC': u'ISRC', 
+#    'album_name': u'ALBUM'
+# } 
+
+for name in  (
+        "Explicit",
+        "template_file" ,
+        "Twitter Description" ,
+        'Artist Email',
+        'Artist Handle',
+        'Artist Number',
+        "Contains Intro",
+        "License",
+        "Series",
+        "Slot",
+        "Tags"):
+    uname = name.upper()
+    VorbisComment.ATTRIBUTE_MAP[name]=uname
+
 
 def encoding_progress_update(position, chunk):
     u'''
@@ -99,16 +138,20 @@ class AudioFile(object):
             (tag, value) = comment.split(u"=", 1)
             self.metadata[tag] = value
 
-    def add_intro_outtro(self, output_filename):
+    def merge_metadata(self, metadata,new_metadata):
+        logging.info('old Map: %s ' % str(metadata,new_metadata))
+        logging.info('new Map: %s ' % str(new_metadata))
+        return new_metadata
+
+
+    def add_intro_outtro(self, output_filename, new_metadata):
         '''
         output_filename = self.get_filename() + ".flac"
-
         Please add the intro and outro clips.
         http://audiotools.sourceforge.net/install.html
         prepend intro.flac
         append outro.flac
         '''
-
         if (os.path.exists(output_filename)):
             return
 
@@ -139,6 +182,9 @@ class AudioFile(object):
                 encoding_progress_update),
             # output_quality,
             total_pcm_frames=sum([af.total_frames() for af in audiofiles]))
+
+        metadata = self.merge_metadata(metadata,new_metadata)
+        
         encoded.set_metadata(metadata)
 
     def get_input_file(self):
@@ -289,12 +335,11 @@ class ShowNotes(object):
         self._project_dir = None
 
     def get_project_name(self):
-        logging.info('get project name: %s ' % self._project_name) 
-        return self._project_name
+        logging.info('get project name: %s ' % self.show_name) 
+        return self.show_name
 
     def set_project_name(self, value):
         logging.info('set project name: %s ' % value) 
-        self._project_name = value
         self.set_name(value)
 
     def get_temp_flac_file(self):
@@ -319,6 +364,26 @@ class ShowNotes(object):
         fileobj.write(string)
         fileobj.close()
 
+    def get_metadata_description(self):
+        return (
+            [
+                [ 'explicit'        , "Explicit"            ],
+                [ "template_file", "template_file"          ], 
+                [ 'twitter_summary' , "Twitter Description" ],
+                [ 'host_email_address', 'Artist Email' ],
+                [ 'host_handle',  'Artist Handle' ],
+                [ 'host_name',  'ARTIST' ],
+                [ 'host_number', 'Artist Number'],
+                [ 'intro_added', "Contains Intro"],
+                [ 'license', "License"],
+                [ 'series', "Series"],
+                [ 'shownotes_text', "COMMENTS"],
+                [ 'slot', "Slot"],
+                [ 'tags' , "Tags"],
+                [ 'title', "TITLE"]
+            ]
+        )
+
     def read_config(self):
         filename = self.get_config_file_name()
 
@@ -337,24 +402,7 @@ class ShowNotes(object):
         if 'format' in obj:
             self.audio_file.set_format = obj['format']
             
-        for (    pair) in (
-            [
-                [ 'explicit'        , "Explicit"            ],
-            [ "template_file", "template_file"          ], 
-            [ 'twitter_summary' , "Twitter Description" ],
-            [ 'host_email_address', 'Artist Email' ],
-            [ 'host_handle',  'Artist Handle' ],
-            [ 'host_name',  'ARTIST' ],
-            [ 'host_number', 'Artist Number'],
-            [ 'intro_added', "Contains Intro"],
-            [ 'license', "License"],
-            [ 'series', "Series"],
-            [ 'shownotes_text', "COMMENTS"],
-            [ 'slot', "Slot"],
-            [ 'tags' , "Tags"],
-            [ 'title', "TITLE"]
-            ]
-        ):
+        for (    pair) in self.get_metadata_description():
 #            logging.info('check metadata %s ' % str(pair) )
             (name,    metadata_name) = pair
 
@@ -381,8 +429,8 @@ class ShowNotes(object):
         '''
         record an already loaded project
         '''
-        filename = self.get_temp_flac_file
-        command = "sox -b 24 -t alsa default %s" % filename
+        filename = self.get_temp_flac_file()
+        command = "sox  -c 1 -b 24  -t alsa default --rate 44100 %s" % filename
         logging.info('logging %s ' % command)
         print ("hit ctrl c twice to stop recording")
         os.system(command)
@@ -707,12 +755,26 @@ class ShowNotes(object):
         return self.get_project_dir() + "/" + filename
 
 
-    def add_intro_outtro(self, output_filename):
+    def calculate_metadata(self):
+        fields = {}
+        obj = self.get_dict()
+        for ( pair) in self.get_metadata_description():
+            (name,  metadata_name) = pair
+            if name in obj:
+                value = obj[name]
+                fields[metadata_name] = value
+        logging.info('new metadata %s ' % str(fields) )
+        metadata = MetaData(fields)
+        logging.info('new metadata %s ' % str(metadata) )
+
+
+    def add_intro_outtro(self):
         '''
         coordinates
         '''
         output_filename = self.get_filename() + ".flac"
-        self.audio_file.add_intro_outtro(output_filename)
+        new_metadata = self.calculate_metadata()
+        self.audio_file.add_intro_outtro(output_filename, new_metadata)
         self.set_intro_added()
 
     def set_intro_added(self):
@@ -827,6 +889,7 @@ def usage():
         "--tag=\n",
         "--title=\n",
         "--print-config\n",
+        "--add-intro-outro\n\ttake the recording.flac and add the intro/outro into it to produce the final file\n"
         "--use-flac=flacfile copy this file into the working directoy\n"
         "\n"
     )
@@ -854,6 +917,7 @@ def main():
                                                                "print-config",
                                                                "use-flac=",
                                                                "emit-html",
+                                                               "add-intro-outro",
                                                                ])
     except getopt.GetoptError as err:
         # print help information and exit:
@@ -921,6 +985,9 @@ def main():
 
         elif o in ("--emit-html"):
             project.emit_html()
+
+        elif o in ("--add-intro-outro"):
+            project.add_intro_outtro()
 
         else:
             assert False, "unhandled option %s" % o
