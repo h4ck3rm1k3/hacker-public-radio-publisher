@@ -28,6 +28,8 @@ import secret as _secret  # passwords
 import sys
 import tarfile
 import logging
+import shutil
+
 #logging.basicConfig(filename='HPR.log',level=logging.DEBUG)
 logging.basicConfig(stream=sys.stdout,level=logging.DEBUG)
 
@@ -36,7 +38,6 @@ def encoding_progress_update(position, chunk):
     called when flac encoding has updated its progress
     '''
     print position, chunk
-
 
 def ftp_upload_cb(chunk):
     u'''
@@ -148,7 +149,7 @@ class AudioFile(object):
 
     def set_input_file(self, filename):
         u'''
-        set attribute and read it
+        set attribute 
         '''
         self.input_file = filename
 
@@ -296,14 +297,20 @@ class ShowNotes(object):
         self._project_name = value
         self.set_name(value)
 
+    def get_temp_flac_file(self):
+        return self.get_project_dir() + "/" + "recording.flac" 
 
-    def get_flac_file(self):
-        filename = self.audio_file.get_input_file()
-        return filename
+    def use_flac_file(self, source):
+        dest = self.get_project_dir() + "/" + "recording.flac" 
+        logging.info('copy from %s to %s' % (source, dest)) 
+        if (not source == dest):
+            shutil.copyfile(source, dest)
 
+    def get_config_file_name(self):
+        return self.get_project_dir() + "/config.py"
 
     def write_config(self):
-        filename = self.get_project_dir() + "/config.py"
+        filename = self.get_config_file_name()
         fileobj = open(filename, "w")
         data = self.get_dict()
         data['project_dir'] = self.get_project_dir()
@@ -313,7 +320,8 @@ class ShowNotes(object):
         fileobj.close()
 
     def read_config(self):
-        filename = self.get_project_dir() + "/config.py"
+        filename = self.get_config_file_name()
+
         fileobj = open(filename)
         data = fileobj.read()
         print (data)
@@ -322,6 +330,39 @@ class ShowNotes(object):
             self.set_project_dir( obj['project_dir'])
         if 'project_dir' in obj:
             self.set_project_dir( obj['project_dir'])
+
+        if 'audio_input_file' in obj:
+            self.audio_file.set_input_file = obj['audio_input_file']
+
+        if 'format' in obj:
+            self.audio_file.set_format = obj['format']
+            
+        for (    pair) in (
+            [
+                [ 'explicit'        , "Explicit"            ],
+            [ "template_file", "template_file"          ], 
+            [ 'twitter_summary' , "Twitter Description" ],
+            [ 'host_email_address', 'Artist Email' ],
+            [ 'host_handle',  'Artist Handle' ],
+            [ 'host_name',  'ARTIST' ],
+            [ 'host_number', 'Artist Number'],
+            [ 'intro_added', "Contains Intro"],
+            [ 'license', "License"],
+            [ 'series', "Series"],
+            [ 'shownotes_text', "COMMENTS"],
+            [ 'slot', "Slot"],
+            [ 'tags' , "Tags"],
+            [ 'title', "TITLE"]
+            ]
+        ):
+            logging.info('check metadata %s ' % str(pair) )
+            (name,    metadata_name) = pair
+
+            if name in obj:
+                value = obj[name]
+                self.set_metadata(metadata_name, value)
+
+
 
     def create(self, name):
         # create a project dir
@@ -341,14 +382,14 @@ class ShowNotes(object):
         record a project
         '''
         self.read_project(project_name)
-        filename = self.flac_file
+        filename = self.get_temp_flac_file
         command = "sox -b 24 -t alsa default %s" % filename
         print (command)
         os.system(command)
 
     def playback(self, project_name):
         self.read_project(project_name)
-        filename = self.flac_file
+        filename = self.get_temp_flac_file
         command = "mplayer %s" % filename
         print (command)
         os.system(command)
@@ -565,6 +606,9 @@ class ShowNotes(object):
         '''
         return self.audio_file.get_format()
 
+    def set_format(self, value):
+        return self.audio_file.set_format(value)
+
     def get_shownotes_text(self):
         '''
         we store the show notes in the comment metadata
@@ -591,6 +635,7 @@ class ShowNotes(object):
         '''
         prints the config
         '''
+        filename = self.get_config_file_name()        
         fileobj = open(filename)
         notes = fileobj.read()
         print notes
@@ -600,19 +645,17 @@ class ShowNotes(object):
         edit the shownotes
         '''
         filename = self.get_filename() + ".txt"
-        filepath = self.get_project_dir() + "/" + filename
-        command = "emacs %s" % filepath
+        command = "emacs %s" % filename
         stat = os.system(command)
         if (stat == 0):
-            self.load_shownotes_from_file(filepath)
+            self.load_shownotes_from_file(filename)
 
     def load_shownotes(self):
         '''
         edit the shownotes
         '''
         filename = self.get_filename() + ".txt"
-        filepath = self.get_project_dir() + "/" + filename
-        self.load_shownotes_from_file(filepath)
+        self.load_shownotes_from_file(filename)
 
 
     @property 
@@ -622,13 +665,9 @@ class ShowNotes(object):
 
     def set_name(self, name):
         self.show_name = name 
-        flac_file_name = self.get_filename() + ".flac"
-        self.audio_file.set_input_file(self.get_project_dir() 
-                                       + "/"+
-                                       flac_file_name)
+        flac_file_name = self.get_temp_flac_file()
+        self.audio_file.set_input_file(flac_file_name)
 
-
-# derived
     def get_filename(self):
         u'''
         FILENAME:
@@ -664,7 +703,9 @@ class ShowNotes(object):
         )
         filename = filename.replace(" ", "_")
         filename = re.sub(r'[^A-Za-z0-9_-]', '_', filename)
-        return filename
+
+        return self.get_project_dir() + "/" + filename
+
 
     def add_intro_outtro(self, output_filename):
         '''
@@ -766,17 +807,6 @@ class ShowNotes(object):
         temp_list.append(self.get_filename() + ".flac")
         return temp_list
 
-# def publish_show(
-#         input_file
-# ):
-#     """
-#     simple accessor
-#     """
-
-#     show.set_input_file( input_file )
-# TODO: not finished yet
-
-
 
 
 def usage():
@@ -797,6 +827,7 @@ def usage():
         "--tag=\n",
         "--title=\n",
         "--print-config\n",
+        "--use-flac=flacfile copy this file into the working directoy\n"
         "\n"
     )
 
@@ -821,6 +852,8 @@ def main():
                                                                "shownotes-editor",
                                                                "shownotes-load",
                                                                "print-config",
+                                                               "use-flac=",
+                                                               "emit-html",
                                                                ])
     except getopt.GetoptError as err:
         # print help information and exit:
@@ -871,17 +904,23 @@ def main():
         elif o in ("--shownotes"):
             project.set_shownotes(a)
 
+        elif o in ("--summary"):
+            project.set_twitter_summary(a)
+
         elif o in ("--tag"):
             project.add_tags(a)
 
         elif o in ("--title"):
             project.set_title(a)
 
-        elif o in ("--summary"):
-            project.set_twitter_summary(a)
+        elif o in ("--use-flac"):
+            project.use_flac_file(a)
 
         elif o in ("--print-config"):
             project.print_config()
+
+        elif o in ("--emit-html"):
+            project.emit_html()
 
         else:
             assert False, "unhandled option %s" % o

@@ -5,7 +5,7 @@
 <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
 </head>
 <body>
-<p><strong>Hostname and email address: </strong>{{host_name}} ({{host_email_address}})</p>
+<p><strong>Hostname and email address: </strong>{{host_name}}/{{host_handle}}/{{host_number}} ({{host_email_address}})</p>
 <!-- see http://hackerpublicradio.org/correspondents.php for details -->
 <p><strong>Show Title: </strong>{{title}}</p>
 <p><strong>Desired Slot: </strong>{{slot}}</p>
