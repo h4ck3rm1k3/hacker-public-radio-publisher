@@ -30,46 +30,12 @@ import sys
 import tarfile
 import logging
 import shutil
-
+from datetime import date
 from audiotools.vorbiscomment import VorbisComment
 #logging.basicConfig(filename='HPR.log',level=logging.DEBUG)
 logging.basicConfig(stream=sys.stdout,level=logging.DEBUG)
 
 logging.info('Attribute Map: %s ' % VorbisComment.ATTRIBUTE_MAP)
-
-#  {'comment': u'COMMENT',   
-#   'media': u'SOURCE MEDIUM', 
-#   'album_total': u'DISCTOTAL', 
-#    'copyright': u'COPYRIGHT', 
-#    'publisher': u'PUBLISHER', 
-#    'composer_name': u'COMPOSER', 
-#    'album_number': u'DISCNUMBER', 
-#    'year': u'DATE', 
-#    'track_total': u'TRACKTOTAL', 
-#    'artist_name': u'ARTIST', 
-#    'track_number': u'TRACKNUMBER', 
-#    'catalog': u'CATALOG', 
-#    'track_name': u'TITLE', 
-#    'performer_name': u'PERFORMER', 
-#    'conductor_name': u'CONDUCTOR', 
-#    'ISRC': u'ISRC', 
-#    'album_name': u'ALBUM'
-# } 
-
-for name in  (
-        "Explicit",
-        "template_file" ,
-        "Twitter Description" ,
-        'Artist Email',
-        'Artist Handle',
-        'Artist Number',
-        "Contains Intro",
-        "License",
-        "Series",
-        "Slot",
-        "Tags"):
-    uname = name.upper()
-    VorbisComment.ATTRIBUTE_MAP[name]=uname
 
 
 def encoding_progress_update(position, chunk):
@@ -139,9 +105,20 @@ class AudioFile(object):
             self.metadata[tag] = value
 
     def merge_metadata(self, metadata,new_metadata):
-        logging.info('old Map: %s ' % str(metadata,new_metadata))
+        logging.info('old Map: %s ' % (str(metadata)))
         logging.info('new Map: %s ' % str(new_metadata))
-        return new_metadata
+        
+        for (attr) in new_metadata.keys():
+            value = new_metadata[attr]
+            logging.info('new value: %s %s ' % (attr, value) )
+            try :
+                old_value = getattr(metadata, attr)
+                if not old_value == value :
+                    setattr(metadata, attr, value)
+                    logging.info('old / new value: %s ' % (old_value, value) )
+            except Exception, e:
+                print e                
+        return metadata
 
 
     def add_intro_outtro(self, output_filename, new_metadata):
@@ -152,13 +129,19 @@ class AudioFile(object):
         prepend intro.flac
         append outro.flac
         '''
+
         if (os.path.exists(output_filename)):
-            return
+            logging.info('output_filename exists: %s ' % output_filename)
+            #return
+        content = audiotools.open_files([self.input_file])
+        metadata = content[0].get_metadata()
+        metadata = self.merge_metadata(metadata,new_metadata)
+
 
         output_filename = audiotools.Filename(output_filename)
 
         intro = audiotools.open_files(['intro.flac'])
-        content = audiotools.open_files([self.input_file])
+
         outro = audiotools.open_files(['outro.flac'])
 
         audiofiles = [
@@ -168,7 +151,7 @@ class AudioFile(object):
         ]
 
         audio_type = audiotools.filename_to_type("intro.flac")
-        metadata = content[0].get_metadata()
+
         output_class = audio_type
         # print audiofiles
         pcms = ([af.to_pcm() for af in audiofiles])
@@ -183,7 +166,7 @@ class AudioFile(object):
             # output_quality,
             total_pcm_frames=sum([af.total_frames() for af in audiofiles]))
 
-        metadata = self.merge_metadata(metadata,new_metadata)
+
         
         encoded.set_metadata(metadata)
 
@@ -220,7 +203,7 @@ class AudioFile(object):
         return mydict
 
 
-class HPRFtp (object):
+class HPRFTP (object):
     '''
     wrapper for the hpr ftp site, takes a show and processes it.
     '''
@@ -304,8 +287,9 @@ class HPRFtp (object):
                     print "skip existing %s" % filename
                     continue
             try:
+                _filepath, _filename = os.path.split(filename)
                 self.host.upload(filename,
-                            path + "/" + filename,
+                            path + "/" + _filename,
                             mode='',
                             callback=ftp_upload_cb)
             except Exception, exp:
@@ -333,6 +317,7 @@ class ShowNotes(object):
         self.audio_file = AudioFile()
         self.show_name = None
         self._project_dir = None
+        self._ftp = HPRFTP(self)
 
     def get_project_name(self):
         logging.info('get project name: %s ' % self.show_name) 
@@ -383,6 +368,7 @@ class ShowNotes(object):
                 [ 'title', "TITLE"]
             ]
         )
+
 
     def read_config(self):
         filename = self.get_config_file_name()
@@ -755,25 +741,62 @@ class ShowNotes(object):
         return self.get_project_dir() + "/" + filename
 
 
+    def get_file_metadata_description(self):
+        return (
+            [
+                [ 'explicit'        , "Explicit"            ],
+                [ "template_file", "template_file"          ], 
+                [ 'twitter_summary' , "Twitter Description" ],
+                [ 'host_email_address', 'Artist Email' ],
+                [ 'host_handle',  'Artist Handle' ],
+                [ 'host_name',  'ARTIST' ],
+                [ 'host_number', 'Artist Number'],
+                [ 'intro_added', "Contains Intro"],
+                [ 'license', "License"],
+                [ 'series', "Series"],
+                [ 'shownotes_text', "COMMENTS"],
+                [ 'slot', "Slot"],
+                [ 'tags' , "Tags"],
+                [ 'title', "TITLE"]
+            ]
+        )
+
     def calculate_metadata(self):
         fields = {}
         obj = self.get_dict()
-        for ( pair) in self.get_metadata_description():
+        
+        logging.info('check %s ' % str(obj) )
+
+        for ( pair) in self.get_file_metadata_description():
             (name,  metadata_name) = pair
             if name in obj:
                 value = obj[name]
                 fields[metadata_name] = value
+            else:
+
+                logging.info('name not there %s ' % str(name) )
         logging.info('new metadata %s ' % str(fields) )
         metadata = MetaData(fields)
         logging.info('new metadata %s ' % str(metadata) )
-
+        return metadata
 
     def add_intro_outtro(self):
         '''
         coordinates
         '''
         output_filename = self.get_filename() + ".flac"
-        new_metadata = self.calculate_metadata()
+        #new_metadata = self.calculate_metadata()
+        new_metadata = {
+            'track_number' : 1,
+            "artist_name": self.get_host_name()  + "(" +  self.get_host_handle() + "/" + self.get_host_number() +   ") <" + self.get_host_email_address() + ">",
+            "copyright": self.get_license(),
+            "title": self.get_title(),
+            "comment": pprint.pformat(self.get_dict()),
+            "audio_file" : self.audio_file.get_dict(), 
+            "year" :  str( date.today().year),
+            "date" :  str(date.today())
+        }
+
         self.audio_file.add_intro_outtro(output_filename, new_metadata)
         self.set_intro_added()
 
@@ -869,6 +892,9 @@ class ShowNotes(object):
         temp_list.append(self.get_filename() + ".flac")
         return temp_list
 
+    def publish(self):
+        self._ftp.put_main_ftp()
+        self._ftp.ls_main_ftp()
 
 
 def usage():
@@ -948,7 +974,7 @@ def main():
             project.record()
 
         elif o in ("-x", "--publish"):
-            project.publish(a)
+            project.publish()
 
         elif o in ("-p", "--playback"):
             project.playback(a)
