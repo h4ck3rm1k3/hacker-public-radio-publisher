@@ -11,6 +11,8 @@ copyright 2013 James Michael DuPont
 distributed under the AGPL v3
 
 '''
+import yaml
+import json
 import audiotools
 from audiotools import MetaData
 from audiotools.flac import (
@@ -34,7 +36,7 @@ from datetime import date
 from audiotools.vorbiscomment import VorbisComment
 #logging.basicConfig(filename='HPR.log',level=logging.DEBUG)
 logging.basicConfig(stream=sys.stdout,level=logging.DEBUG)
-
+import PyRSS2Gen
 logging.info('Attribute Map: %s ' % VorbisComment.ATTRIBUTE_MAP)
 
 
@@ -318,6 +320,11 @@ class ShowNotes(object):
         self.show_name = None
         self._project_dir = None
         self._ftp = HPRFTP(self)
+        self._date =date.today()
+
+    @property
+    def date(self):
+        return self._date
 
     def get_project_name(self):
         logging.info('get project name: %s ' % self.show_name) 
@@ -339,12 +346,16 @@ class ShowNotes(object):
     def get_config_file_name(self):
         return self.get_project_dir() + "/config.py"
 
-    def write_config(self):
-        filename = self.get_config_file_name()
-        fileobj = open(filename, "w")
+    def _prepare_config(self):
         data = self.get_dict()
         data['project_dir'] = self.get_project_dir()
         data['project_name'] = self.get_project_name()
+        return data
+
+    def write_config(self):
+        filename = self.get_config_file_name()
+        fileobj = open(filename, "w")
+        data= self._prepare_config()
         string = pprint.pformat(data)
         fileobj.write(string)
         fileobj.close()
@@ -370,13 +381,7 @@ class ShowNotes(object):
         )
 
 
-    def read_config(self):
-        filename = self.get_config_file_name()
-
-        fileobj = open(filename)
-        data = fileobj.read()
-#        print (data)
-        obj = eval(data)
+    def decode(self, obj):
         if 'project_dir' in obj:
             self.set_project_dir( obj['project_dir'])
         if 'project_dir' in obj:
@@ -388,7 +393,7 @@ class ShowNotes(object):
         if 'format' in obj:
             self.audio_file.set_format = obj['format']
             
-        for (    pair) in self.get_metadata_description():
+        for (pair) in self.get_metadata_description():
 #            logging.info('check metadata %s ' % str(pair) )
             (name,    metadata_name) = pair
 
@@ -396,7 +401,16 @@ class ShowNotes(object):
                 value = obj[name]
                 self.set_metadata(metadata_name, value)
 
+    def read_config(self):
+        filename = self.get_config_file_name()
 
+        fileobj = open(filename)
+        data = fileobj.read()
+#        print (data)
+        obj = eval(data)
+        self.decode(obj)
+
+    
 
     def create(self, name):
         # create a project dir
@@ -479,6 +493,7 @@ class ShowNotes(object):
         # Finally, process the template to produce our final text.
         html = template.render(self.get_dict())
         return html
+
 
     def emit_html(self):
         u'''
@@ -793,8 +808,8 @@ class ShowNotes(object):
             "title": self.get_title(),
             "comment": pprint.pformat(self.get_dict()),
             "audio_file" : self.audio_file.get_dict(), 
-            "year" :  str( date.today().year),
-            "date" :  str(date.today())
+            "year" :  str( self.date.year),
+            "date" :  self.date
         }
 
         self.audio_file.add_intro_outtro(output_filename, new_metadata)
@@ -896,6 +911,44 @@ class ShowNotes(object):
         self._ftp.put_main_ftp()
         self._ftp.ls_main_ftp()
 
+    def load_json_file(self, a):
+        fileobj = open(a)
+        data = fileobj.read()
+        obj = json.load(data)
+        self.decode(obj)
+
+    def save_json_file(self, a):        
+        data= self._prepare_config()
+        string = json.dumps(data)
+        fileobj = open(a, "w")
+        fileobj.write(string)
+        fileobj.close()
+
+    def load_yaml_file(self, a):
+        fileobj = open(a)
+        data = fileobj.read()
+        obj = yaml.load(data)
+        self.decode(obj)
+
+    def save_yaml_file(self, a):
+        data= self._prepare_config()
+        yaml= yaml.dump(data)
+        fileobj = open(a, "w")
+        fileobj.write(yaml)
+        fileobj.close()
+
+    def emit_rss_file(self, a):
+        data= self._prepare_config()
+        del data['audio_file']
+        del data['audio_file']
+        item = PyRSS2Gen.RSSItem(
+            link = "http://hackerpublicradio.org/eps.php?id={{episode}}" ,
+            description = data['twitter_summary'],
+            **data)
+        item.write_xml(open(a, "w"))
+
+
+
 
 def usage():
     print (
@@ -911,6 +964,11 @@ def usage():
         "--shownotes-file=\n",
         "--shownotes-load\n",
         "--shownotes-editor\n",
+        "--load-json-file=jsonfile\n",
+        "--load-yaml-file=yaml-file\n",
+        "--save-json-file=jsonfile\n",
+        "--save-yaml-file=yaml-file\n",
+#        "--emit-rss-file=yaml-file\n",
         "--summary=\n",
         "--tag=\n",
         "--title=\n",
@@ -944,6 +1002,14 @@ def main():
                                                                "use-flac=",
                                                                "emit-html",
                                                                "add-intro-outro",
+
+                                                               "load-json-file=",
+                                                               "save-json-file=",
+                                                               "load-yaml-file=",
+                                                               "save-yaml-file=",
+
+#                                                               "emit-rss-file=",
+                                                               
                                                                ])
     except getopt.GetoptError as err:
         # print help information and exit:
@@ -1014,6 +1080,20 @@ def main():
 
         elif o in ("--add-intro-outro"):
             project.add_intro_outtro()
+
+        elif o in ("--load-json-file"):
+            project.load_json_file(a)
+        elif o in ("--save-json-file"):
+            project.save_json_file(a)
+
+
+        elif o in ("--load-yaml-file"):
+            project.load_yaml_file(a)
+        elif o in ("--save-yaml-file"):
+            project.save_yaml_file(a)
+
+        #        elif o in ("--emit-rss-file"):
+        #            project.emit_rss_file(a)
 
         else:
             assert False, "unhandled option %s" % o
