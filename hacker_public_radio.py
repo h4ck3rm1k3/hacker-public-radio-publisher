@@ -918,13 +918,13 @@ class ShowNotes(object):
 
     def load_json_file(self, a):
         fileobj = open(a)
-        data = fileobj.read()
-        obj = json.load(data)
+#        data = fileobj.read()
+        obj = json.load(fileobj)
         self.decode(obj)
 
     def save_json_file(self, a):        
         data= self._prepare_config()
-        string = json.dumps(data)
+        string = json.dumps(data, indent=4)
         fileobj = open(a, "w")
         fileobj.write(string)
         fileobj.close()
