@@ -382,8 +382,13 @@ class ShowNotes(object):
 
 
     def decode(self, obj):
+
+        if 'project_name' in obj:
+            self.set_project_name( obj['project_name'])
+
         if 'project_dir' in obj:
             self.set_project_dir( obj['project_dir'])
+
         if 'project_dir' in obj:
             self.set_project_dir( obj['project_dir'])
 
@@ -932,9 +937,9 @@ class ShowNotes(object):
 
     def save_yaml_file(self, a):
         data= self._prepare_config()
-        yaml= yaml.dump(data)
+        string= yaml.dump(data)
         fileobj = open(a, "w")
-        fileobj.write(yaml)
+        fileobj.write(string)
         fileobj.close()
 
     def emit_rss_file(self, a):
