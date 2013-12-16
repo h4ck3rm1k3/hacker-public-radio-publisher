@@ -537,7 +537,9 @@ class ShowNotes(object):
             "series": self.get_series(),
             "tags": self.get_tags(),
             "explicit": self.get_explicit(),
-            "twitter_summary": self.get_twitter_summary(),
+            'short_summary' : self.short_summary,
+            'medium_summary':  self.medium_summary,
+
             "format": self.get_format(),
             "shownotes_text": self.get_shownotes_text(),
             "filename": self.get_filename(),
@@ -650,11 +652,33 @@ class ShowNotes(object):
         '''
         return self.get_metadata("Explicit", default="Clean")
 
-    def get_twitter_summary(self):
+    @property
+    def short_summary(self):
         u'''
-        7. Twitter/Identi.CA Summary:
+        7. Short Summary for Twitter/Identi.CA:
         '''
-        return self.get_metadata("Twitter Description") or self.get_title()[0:144]
+        return self.get_metadata("Short Summary") or self.get_title()[0:144]
+
+    @short_summary.setter
+    def short_summary(self, value):
+        u'''
+        7. Short Summary for Twitter/Identi.CA:
+        '''
+        return self.set_metadata("Short Summary", value )
+
+
+    @property
+    def medium_summary(self):
+        u'''
+        7. Medium Summary for Website
+        '''
+        return self.get_metadata("Medium Summary") or self.get_title()[0:144]
+
+    @medium_summary.setter
+    def medium_summary(self, value):
+        u'''
+        '''
+        return self.set_metadata("Medium Summary", value )
 
     def get_format(self):
         u'''
@@ -775,7 +799,8 @@ class ShowNotes(object):
             [
                 [ 'explicit'        , "Explicit"            ],
                 [ "template_file", "template_file"          ], 
-                [ 'twitter_summary' , "Twitter Description" ],
+                [ 'short_summary' , "Twitter Description" ],
+                [ 'medium_summary' , "Web Page Short Description" ],
                 [ 'host_email_address', 'Artist Email' ],
                 [ 'host_handle',  'Artist Handle' ],
                 [ 'host_name',  'ARTIST' ],
@@ -971,7 +996,8 @@ def usage():
         "--load-yaml-file=yaml-file\n",
         "--save-json-file=jsonfile\n",
         "--save-yaml-file=yaml-file\n",
-        "--summary=\n",
+        "--short= Short Summary\n",
+        "--medium= Medium Summary\n",
         "--tag=\n",
         "--title=\n",
         "--print-config\n",
@@ -995,7 +1021,8 @@ def main():
                                                                "series=",
                                                                "shownotes=",
                                                                "shownotes-file=",
-                                                               "summary=",
+                                                               "short=",
+                                                               "medium=",
                                                                "tag=",
                                                                "title=",
                                                                "shownotes-editor",
@@ -1060,8 +1087,11 @@ def main():
         elif o in ("--shownotes"):
             project.set_shownotes(a)
 
-        elif o in ("--summary"):
-            project.set_twitter_summary(a)
+        elif o in ("--short"):
+            project.short_summary=a
+
+        elif o in ("--medium"):
+            project.medium_summary=a
 
         elif o in ("--tag"):
             project.add_tags(a)

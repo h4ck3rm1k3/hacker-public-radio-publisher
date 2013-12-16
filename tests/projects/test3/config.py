@@ -17,11 +17,12 @@
  'host_number': '260',
  'intro_added': 'No',
  'license': 'http://creativecommons.org/licenses/by-sa/3.0/',
+ 'medium_summary': 'NONE',
  'project_dir': './projects/test3',
  'project_name': 'test3',
  'series': 'NONE',
+ 'short_summary': 'NONE',
  'shownotes_text': 'NONE',
  'slot': 'Next Available Slot',
  'tags': 'NONE',
- 'title': 'NONE',
- 'twitter_summary': 'NONE'}
+ 'title': 'NONE'}
