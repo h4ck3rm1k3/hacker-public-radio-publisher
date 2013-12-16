@@ -1,0 +1,34 @@
+{
+    "slot": "Next Available Slot", 
+    "audio_file": {
+        "Comment": "Processed by SoX", 
+        "format": "FLAC", 
+        "md5sum": "vzpygjWtKOS1ty2TpdqigQ==", 
+        "channels": 1, 
+        "total_sample": 105108, 
+        "sample_rate": 44100, 
+        "bits_per_sample": 24, 
+        "file_size": 211387, 
+        "audio_file_md5": "f82363d69a3484846aae87113476424b", 
+        "input_file": "./projects/test3/recording.flac"
+    }, 
+    "project_name": "test3", 
+    "license": "http://creativecommons.org/licenses/by-sa/3.0/", 
+    "title": "My test show from the command line with a very long titlethat will be truncated for twitter to 144 chars......1234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890", 
+    "host_number": "260", 
+    "format": "FLAC", 
+    "tags": [
+        "Funky", 
+        "Soul"
+    ], 
+    "explicit": "Clean", 
+    "twitter_summary": "My test show from the command line with a very long titlethat will be truncated for twitter to 144 chars......1234567890123456789012345678901234", 
+    "host_email_address": "jamesmikedupont@google.com", 
+    "host_name": "James Michael DuPont", 
+    "series": "Testing", 
+    "host_handle": "h4ck3rm1k3", 
+    "shownotes_text": "NONE", 
+    "filename": "./projects/test3/260-James_Michael_DuPont-test3", 
+    "project_dir": "./projects/test3", 
+    "intro_added": "No"
+}
