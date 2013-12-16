@@ -11,6 +11,7 @@ copyright 2013 James Michael DuPont
 distributed under the AGPL v3
 
 '''
+import hashlib
 import yaml
 import json
 import audiotools
@@ -36,8 +37,15 @@ from datetime import date
 from audiotools.vorbiscomment import VorbisComment
 #logging.basicConfig(filename='HPR.log',level=logging.DEBUG)
 logging.basicConfig(stream=sys.stdout,level=logging.DEBUG)
-import PyRSS2Gen
-logging.info('Attribute Map: %s ' % VorbisComment.ATTRIBUTE_MAP)
+
+#logging.info('Attribute Map: %s ' % VorbisComment.ATTRIBUTE_MAP)
+
+import base64
+
+
+import hashlib
+def md5sum_file(fname):
+    return hashlib.md5(open(fname, 'rb').read()).hexdigest()
 
 
 def encoding_progress_update(position, chunk):
@@ -94,7 +102,8 @@ class AudioFile(object):
         '''
         self.audio_metadata = self.audio_file.get_metadata()
         streaminfo = self.audio_metadata.get_block(Flac_STREAMINFO.BLOCK_ID)
-        self.metadata['md5sum'] = str(streaminfo.md5sum)
+        self.metadata['md5sum'] = base64.b64encode(streaminfo.md5sum)
+
         self.metadata['total_sample'] = streaminfo.total_samples
         self.metadata['bits_per_sample'] = streaminfo.bits_per_sample
         self.metadata['channels'] = streaminfo.channels
@@ -184,12 +193,6 @@ class AudioFile(object):
         '''
         self.input_file = filename
 
-    def read_audio_files():
-        self.audio_file.read_file()
-        # read metadata
-        self.audio_file.read_metadata()
-
-
     def get_format(self):
         return self._format
 
@@ -198,9 +201,14 @@ class AudioFile(object):
         turn the show into a dictionary
         for the template system
         '''
+        if(self.audio_file is None):
+            self.read_file()
+
+        self.read_metadata()
         mydict =   self.metadata
         mydict["format"] =self.get_format()
-        mydict["input_file"] = self.get_input_file()
+        mydict["input_file"] = self.get_input_file()       
+        mydict ["audio_file_md5"]= md5sum_file(self.get_input_file())
 
         return mydict
 
@@ -365,7 +373,8 @@ class ShowNotes(object):
             [
                 [ 'explicit'        , "Explicit"            ],
                 [ "template_file", "template_file"          ], 
-                [ 'twitter_summary' , "Twitter Description" ],
+                [ 'short_summary' , "Short Description" ],
+                [ 'summary_medium' , "Medium Length" ],
                 [ 'host_email_address', 'Artist Email' ],
                 [ 'host_handle',  'Artist Handle' ],
                 [ 'host_name',  'ARTIST' ],
@@ -942,17 +951,6 @@ class ShowNotes(object):
         fileobj.write(string)
         fileobj.close()
 
-    def emit_rss_file(self, a):
-        data= self._prepare_config()
-        del data['audio_file']
-        del data['audio_file']
-        item = PyRSS2Gen.RSSItem(
-            link = "http://hackerpublicradio.org/eps.php?id={{episode}}" ,
-            description = data['twitter_summary'],
-            **data)
-        item.write_xml(open(a, "w"))
-
-
 
 
 def usage():
@@ -973,7 +971,6 @@ def usage():
         "--load-yaml-file=yaml-file\n",
         "--save-json-file=jsonfile\n",
         "--save-yaml-file=yaml-file\n",
-#        "--emit-rss-file=yaml-file\n",
         "--summary=\n",
         "--tag=\n",
         "--title=\n",
@@ -1012,8 +1009,6 @@ def main():
                                                                "save-json-file=",
                                                                "load-yaml-file=",
                                                                "save-yaml-file=",
-
-#                                                               "emit-rss-file=",
                                                                
                                                                ])
     except getopt.GetoptError as err:
@@ -1094,11 +1089,9 @@ def main():
 
         elif o in ("--load-yaml-file"):
             project.load_yaml_file(a)
+
         elif o in ("--save-yaml-file"):
             project.save_yaml_file(a)
-
-        #        elif o in ("--emit-rss-file"):
-        #            project.emit_rss_file(a)
 
         else:
             assert False, "unhandled option %s" % o
