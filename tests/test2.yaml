@@ -1,6 +1,6 @@
 audio_file: {!!python/unicode 'Comment': !!python/unicode 'Processed by SoX', audio_file_md5: f82363d69a3484846aae87113476424b,
   bits_per_sample: 24, channels: 1, file_size: 211387, format: FLAC, input_file: ./projects/test3/recording.flac,
-  md5sum: vzpygjWtKOS1ty2TpdqigQ==, sample_rate: 44100, total_sample: !!python/long '105108'}
+  md5sum: vzpygjWtKOS1ty2TpdqigQ==, sample_rate: 44100, seconds_length: 2, total_sample: !!python/long '105108'}
 explicit: Clean
 filename: ./projects/test3/260-James_Michael_DuPont-test3
 format: FLAC

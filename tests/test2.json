@@ -5,11 +5,12 @@
         "format": "FLAC", 
         "md5sum": "vzpygjWtKOS1ty2TpdqigQ==", 
         "channels": 1, 
+        "audio_file_md5": "f82363d69a3484846aae87113476424b", 
         "total_sample": 105108, 
         "sample_rate": 44100, 
         "bits_per_sample": 24, 
         "file_size": 211387, 
-        "audio_file_md5": "f82363d69a3484846aae87113476424b", 
+        "seconds_length": 2, 
         "input_file": "./projects/test3/recording.flac"
     }, 
     "project_name": "test3", 

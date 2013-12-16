@@ -7,6 +7,7 @@
                 'input_file': './projects/test3/recording.flac',
                 'md5sum': 'vzpygjWtKOS1ty2TpdqigQ==',
                 'sample_rate': 44100,
+                'seconds_length': 2,
                 'total_sample': 105108L},
  'explicit': 'Clean',
  'filename': './projects/test3/260-James_Michael_DuPont-test3',

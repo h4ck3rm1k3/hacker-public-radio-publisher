@@ -106,6 +106,7 @@ class AudioFile(object):
 
         self.metadata['total_sample'] = streaminfo.total_samples
         self.metadata['bits_per_sample'] = streaminfo.bits_per_sample
+        self.metadata['seconds_length'] = int(self.audio_file.seconds_length())
         self.metadata['channels'] = streaminfo.channels
         self.metadata['sample_rate'] = streaminfo.sample_rate
         self.metadata['file_size'] = os.path.getsize(self.input_file)
@@ -374,7 +375,7 @@ class ShowNotes(object):
                 [ 'explicit'        , "Explicit"            ],
                 [ "template_file", "template_file"          ], 
                 [ 'short_summary' , "Short Description" ],
-                [ 'summary_medium' , "Medium Length" ],
+                [ 'summary_medium' , "Medium Length Description" ],
                 [ 'host_email_address', 'Artist Email' ],
                 [ 'host_handle',  'Artist Handle' ],
                 [ 'host_name',  'ARTIST' ],
